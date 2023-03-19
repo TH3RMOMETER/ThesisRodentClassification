@@ -1,0 +1,7 @@
+
+settings.mat
+*.asv
+Training/
+Detections/*.mat
+Audio/
+*.jpg

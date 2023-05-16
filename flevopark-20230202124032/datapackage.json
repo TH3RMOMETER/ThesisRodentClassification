@@ -1,0 +1,863 @@
+{
+  "name": "flevopark-20230202124032",
+  "id": "004fa1aa-a1d7-4def-ab70-059b2a96ba46",
+  "profile": "https://raw.githubusercontent.com/tdwg/camtrap-dp/0.1.6/camtrap-dp-profile.json",
+  "created": "2023-02-02T12:40:32Z",
+  "sources": [
+    {
+      "title": "Agouti",
+      "path": "https://www.agouti.eu",
+      "email": "agouti@wur.nl"
+    }
+  ],
+  "contributors": [
+    {
+      "title": "Akke de Lange",
+      "email": "akke.lange@gmail.com",
+      "role": "contributor"
+    },
+    {
+      "title": "Anna Santallúsia Ballarín",
+      "email": "annasantallusia@gmail.com",
+      "role": "contributor"
+    },
+    {
+      "title": "Anne Haringhuizen",
+      "email": "anne.haringhuizen@student.uva.nl",
+      "role": "contributor"
+    },
+    {
+      "title": "Annemiek Bruijn",
+      "email": "annemiek.bruijn@student.uva.nl",
+      "role": "contributor"
+    },
+    {
+      "title": "Caitlin Black",
+      "email": "c.e.black@uva.nl",
+      "role": "author"
+    },
+    {
+      "title": "Carlijn Stoffels",
+      "email": "carlijn.stoffels@gmail.com",
+      "role": "contributor"
+    },
+    {
+      "title": "Celia Carrascosa",
+      "email": "celiacarrascosaflores@gmail.com",
+      "role": "author"
+    },
+    {
+      "title": "Cindy Zoll",
+      "email": "Cindy.Zoll@student.uva.nl",
+      "role": "contributor"
+    },
+    {
+      "title": "Eva Pot",
+      "email": "maaike.pot@hotmail.com",
+      "role": "contributor"
+    },
+    {
+      "title": "Fedor Batelaan",
+      "email": "fedorbatelaan@gmail.com",
+      "role": "contributor"
+    },
+    {
+      "title": "Flavia Aschi",
+      "email": "flavia.aschi@student.uva.nl",
+      "role": "contributor"
+    },
+    {
+      "title": "Ivo Harmens",
+      "email": "ivooegstgeest@gmail.com",
+      "role": "contributor"
+    },
+    {
+      "title": "Jens de Zeeuw",
+      "email": "jens.de.zeeuw@student.uva.nl",
+      "role": "contributor"
+    },
+    {
+      "title": "Joana Casaca",
+      "email": "joana.casaca@student.uva.nl",
+      "role": "contributor"
+    },
+    {
+      "title": "Jochem Kockelkoren",
+      "email": "jochem.kockelkoren@student.uva.nl",
+      "role": "contributor"
+    },
+    {
+      "title": "Jonathan Riet",
+      "email": "13342843@uva.nl",
+      "role": "contributor"
+    },
+    {
+      "title": "Julian Evans",
+      "email": "jevansbio@gmail.com",
+      "role": "author"
+    },
+    {
+      "title": "Kyra Beeftink",
+      "email": "kyra.beeftink@student.uva.nl",
+      "role": "contributor"
+    },
+    {
+      "title": "Mats Werkhoven",
+      "email": "Matswerkhoven2002@gmail.com",
+      "role": "contributor"
+    },
+    {
+      "title": "Maud Jansen",
+      "email": "maudjitske@gmail.com",
+      "role": "contributor"
+    },
+    {
+      "title": "Max van Zevenbergen",
+      "email": "maxgeluk@gmail.com",
+      "role": "contributor"
+    },
+    {
+      "title": "Priyanka Singh",
+      "email": "priyanka.singh2@student.uva.nl",
+      "role": "author"
+    },
+    {
+      "title": "Riccardo Mazza",
+      "email": "mazza.riccardo@outlook.it",
+      "role": "author"
+    },
+    {
+      "title": "robin kluyskens",
+      "email": "robin.klusyekns@gmail.com",
+      "role": "contributor"
+    },
+    {
+      "title": "robin kluyskens",
+      "email": "robin.kluyskens@gmail.com",
+      "role": "contributor"
+    },
+    {
+      "title": "Rosa Buis",
+      "email": "rosa.buis@student.uva.nl",
+      "role": "contributor"
+    },
+    {
+      "title": "Rotem Zilber",
+      "email": "r.kadanzilber@uva.nl",
+      "role": "author",
+      "organization": "ARISE"
+    },
+    {
+      "title": "Roy van Tol",
+      "email": "roy.van.tol@student.uva.nl",
+      "role": "contributor"
+    },
+    {
+      "title": "Samuel Roijé",
+      "email": "samuel.roye@gmail.com",
+      "role": "contributor"
+    },
+    {
+      "title": "Sander Kamphorst",
+      "email": "sander.kamphorst@student.uva.nl",
+      "role": "contributor"
+    },
+    {
+      "title": "Sarah Kraakman",
+      "email": "sarah.kraakman@student.uva.nl",
+      "role": "contributor"
+    },
+    {
+      "title": "Saskia IJlst",
+      "email": "saskia.ijlst@student.uva.nl",
+      "role": "contributor"
+    },
+    {
+      "title": "Seona Griffith",
+      "email": "seonagriffith@gmail.com",
+      "role": "contributor"
+    },
+    {
+      "title": "Sofie Knol",
+      "email": "sofie.knol@student.uva.nl",
+      "role": "contributor"
+    },
+    {
+      "title": "Sophie Pieper",
+      "email": "sophiepieper2001@gmail.com",
+      "role": "contributor"
+    },
+    {
+      "title": "Thijs Meester",
+      "email": "thijsmeester14@gmail.com",
+      "role": "contributor"
+    },
+    {
+      "title": "Tol Marsman",
+      "email": "tolletjemarsmannetje@gmail.com",
+      "role": "contributor"
+    },
+    {
+      "title": "Tristan Heijdra",
+      "email": "tristanheijdra@gmail.com",
+      "role": "contributor"
+    },
+    {
+      "title": "W. Daniel Kissling",
+      "email": "wdkissling@gmail.com",
+      "role": "author"
+    },
+    {
+      "title": "Wessel Mulder",
+      "email": "w.h.g.mulder@uva.nl",
+      "role": "contributor"
+    },
+    {
+      "title": "Yorick Liefting",
+      "email": "yorick.liefting@wur.nl",
+      "role": "maintainer",
+      "organization": "Wageningen University"
+    }
+  ],
+  "organizations": [
+    {
+      "title": "ARISE"
+    }
+  ],
+  "project": {
+    "id": "9f4db244-e0db-4353-a9bc-343916a711f2",
+    "title": "Flevopark",
+    "captureMethod": [
+      "motion detection"
+    ],
+    "animalTypes": [
+      "unmarked"
+    ],
+    "classificationLevel": "sequence",
+    "sequenceInterval": 120
+  },
+  "spatial": {
+    "type": "Feature",
+    "bbox": [
+      4.94768,
+      52.35861,
+      4.95183,
+      52.36197
+    ],
+    "properties": {},
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [
+            4.94768,
+            52.35861
+          ],
+          [
+            4.95183,
+            52.35861
+          ],
+          [
+            4.95183,
+            52.36197
+          ],
+          [
+            4.94768,
+            52.36197
+          ],
+          [
+            4.94768,
+            52.35861
+          ]
+        ]
+      ]
+    }
+  },
+  "temporal": {
+    "start": "2020-01-01",
+    "end": "2021-12-16"
+  },
+  "taxonomic": [
+    {
+      "taxonID": "DGP6",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Anas platyrhynchos",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "mallard",
+        "nl": "wilde eend"
+      }
+    },
+    {
+      "taxonID": "FRHZ",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Apodemus flavicollis",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "yellow-necked field mouse",
+        "nl": "grote bosmuis"
+      }
+    },
+    {
+      "taxonID": "FRJJ",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Apodemus sylvaticus",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "wood mouse",
+        "nl": "bosmuis"
+      }
+    },
+    {
+      "taxonID": "32FH",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Ardea",
+      "taxonRank": "genus",
+      "vernacularNames": {
+        "en": "great herons",
+        "nl": "reigers"
+      }
+    },
+    {
+      "taxonID": "GCHS",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Ardea cinerea",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "grey heron",
+        "nl": "blauwe reiger"
+      }
+    },
+    {
+      "taxonID": "NYV7",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Buteo buteo",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "common buzzard",
+        "nl": "buizerd"
+      }
+    },
+    {
+      "taxonID": "5G6ZJ",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Canis lupus familiaris",
+      "taxonRank": "subspecies",
+      "vernacularNames": {
+        "en": "dog",
+        "nl": "hond"
+      }
+    },
+    {
+      "taxonID": "QSF3",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Capreolus capreolus",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "roe deer",
+        "nl": "ree"
+      }
+    },
+    {
+      "taxonID": "RQPW",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Castor fiber",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "Eurasian beaver",
+        "nl": "bever"
+      }
+    },
+    {
+      "taxonID": "T56G",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Cervus elaphus",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "red deer",
+        "nl": "edelhert"
+      }
+    },
+    {
+      "taxonID": "5ZQ9C",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Columba oenas",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "stock dove",
+        "nl": "holenduif"
+      }
+    },
+    {
+      "taxonID": "XBGG",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Columba palumbus",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "common wood pigeon",
+        "nl": "houtduif"
+      }
+    },
+    {
+      "taxonID": "8GD",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Columbidae",
+      "taxonRank": "family",
+      "vernacularNames": {
+        "en": "pigeons and doves",
+        "nl": "duiven"
+      }
+    },
+    {
+      "taxonID": "8L6",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Corvidae",
+      "taxonRank": "family",
+      "vernacularNames": {
+        "en": "corvids",
+        "nl": "kraaien"
+      }
+    },
+    {
+      "taxonID": "YNHG",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Corvus corax",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "common raven",
+        "nl": "raaf"
+      }
+    },
+    {
+      "taxonID": "YNHJ",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Corvus corone",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "carrion crow",
+        "nl": "zwarte kraai"
+      }
+    },
+    {
+      "taxonID": "6CJDB",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Dendrocopos major",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "great spotted woodpecker",
+        "nl": "grote bonte specht"
+      }
+    },
+    {
+      "taxonID": "4DLP",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Equus",
+      "taxonRank": "genus",
+      "vernacularNames": {
+        "en": "horses, donkeys and zebras",
+        "nl": "paarden, ezels, zebras"
+      }
+    },
+    {
+      "taxonID": "3B2C2",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Erinaceus europaeus",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "European hedgehog",
+        "nl": "egel"
+      }
+    },
+    {
+      "taxonID": "6H2XM",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Erithacus rubecula",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "European robin",
+        "nl": "roodborst"
+      }
+    },
+    {
+      "taxonID": "4JQ8",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Felis",
+      "taxonRank": "genus",
+      "vernacularNames": {}
+    },
+    {
+      "taxonID": "3DXV3",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Felis catus",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "domestic cat",
+        "nl": "kat"
+      }
+    },
+    {
+      "taxonID": "6JPSJ",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Fringilla coelebs",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "common chaffinch",
+        "nl": "vink"
+      }
+    },
+    {
+      "taxonID": "6K3W6",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Fulica atra",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "Eurasian coot",
+        "nl": "meerkoet"
+      }
+    },
+    {
+      "taxonID": "3F6VX",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Gallinula chloropus",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "common moorhen",
+        "nl": "waterhoen"
+      }
+    },
+    {
+      "taxonID": "4LYQ",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Gallus",
+      "taxonRank": "genus",
+      "vernacularNames": {
+        "en": "junglefowl",
+        "nl": "wilde kippen"
+      }
+    },
+    {
+      "taxonID": "6JYHZ",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Garrulus glandarius",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "Eurasian jay",
+        "nl": "gaai"
+      }
+    },
+    {
+      "taxonID": "6MB3T",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Homo sapiens",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "human",
+        "nl": "mens"
+      }
+    },
+    {
+      "taxonID": "5LMD",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Martes",
+      "taxonRank": "genus",
+      "vernacularNames": {
+        "en": "martens",
+        "nl": "marters"
+      }
+    },
+    {
+      "taxonID": "3ZDRX",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Meles meles",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "European badger",
+        "nl": "das"
+      }
+    },
+    {
+      "taxonID": "42ZQ8",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Micromys minutus",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "harvest mouse",
+        "nl": "dwergmuis"
+      }
+    },
+    {
+      "taxonID": "44NK3",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Mus musculus",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "house mouse",
+        "nl": "huismuis"
+      }
+    },
+    {
+      "taxonID": "44QYC",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Mustela putorius",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "European polecat",
+        "nl": "bunzing"
+      }
+    },
+    {
+      "taxonID": "6RRQT",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Myocastor coypus",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "coypu",
+        "nl": "beverrat"
+      }
+    },
+    {
+      "taxonID": "74ZBP",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Oryctolagus cuniculus",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "European rabbit",
+        "nl": "Europees konijn"
+      }
+    },
+    {
+      "taxonID": "4B9VF",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Ovis aries",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "domestic sheep",
+        "nl": "schaap"
+      }
+    },
+    {
+      "taxonID": "75SVV",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Parus major",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "great tit",
+        "nl": "koolmees"
+      }
+    },
+    {
+      "taxonID": "4DXXM",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Passer domesticus",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "house sparrow",
+        "nl": "huismus"
+      }
+    },
+    {
+      "taxonID": "3RL",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Passeriformes",
+      "taxonRank": "order",
+      "vernacularNames": {
+        "en": "passerines",
+        "nl": "zangvogels"
+      }
+    },
+    {
+      "taxonID": "4FWMN",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Phasianus colchicus",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "common pheasant",
+        "nl": "fazant"
+      }
+    },
+    {
+      "taxonID": "4HPXM",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Pica pica",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "Eurasian magpie",
+        "nl": "ekster"
+      }
+    },
+    {
+      "taxonID": "4N8CC",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Prunella modularis",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "dunnock",
+        "nl": "heggenmus"
+      }
+    },
+    {
+      "taxonID": "4RB9P",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Rallus aquaticus",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "water rail",
+        "nl": "waterral"
+      }
+    },
+    {
+      "taxonID": "4RM67",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Rattus norvegicus",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "brown rat",
+        "nl": "bruine rat"
+      }
+    },
+    {
+      "taxonID": "4RM6W",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Rattus rattus",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "black rat",
+        "nl": "zwarte rat"
+      }
+    },
+    {
+      "taxonID": "3Z5",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Rodentia",
+      "taxonRank": "order",
+      "vernacularNames": {
+        "en": "rodents",
+        "nl": "knaagdieren"
+      }
+    },
+    {
+      "taxonID": "79Y2K",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Sciurus vulgaris",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "red squirrel",
+        "nl": "rode eekhoorn"
+      }
+    },
+    {
+      "taxonID": "4YBZ2",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Sorex araneus",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "common shrew",
+        "nl": "bosspitsmuis"
+      }
+    },
+    {
+      "taxonID": "53HGR",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Sus scrofa",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "wild boar",
+        "nl": "everzwijn"
+      }
+    },
+    {
+      "taxonID": "598TT",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Troglodytes troglodytes",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "Eurasian wren",
+        "nl": "winterkoning"
+      }
+    },
+    {
+      "taxonID": "HLW",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Turdidae",
+      "taxonRank": "family",
+      "vernacularNames": {
+        "en": "thrushes",
+        "nl": "lijsters"
+      }
+    },
+    {
+      "taxonID": "59PLT",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Turdus iliacus",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "redwing",
+        "nl": "koperwiek"
+      }
+    },
+    {
+      "taxonID": "7CYVX",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Turdus merula",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "common blackbird",
+        "nl": "merel"
+      }
+    },
+    {
+      "taxonID": "59PMR",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Turdus philomelos",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "song thrush",
+        "nl": "zanglijster"
+      }
+    },
+    {
+      "taxonID": "5BSG3",
+      "taxonIDReference": "https://www.checklistbank.org/dataset/3LR",
+      "scientificName": "Vulpes vulpes",
+      "taxonRank": "species",
+      "vernacularNames": {
+        "en": "red fox",
+        "nl": "vos"
+      }
+    }
+  ],
+  "platform": {
+    "title": "Agouti",
+    "path": "https://agouti.eu",
+    "packageID": "004fa1aa-a1d7-4def-ab70-059b2a96ba46"
+  },
+  "resources": [
+    {
+      "name": "deployments",
+      "path": "deployments.csv",
+      "profile": "tabular-data-resource",
+      "format": "csv",
+      "mediatype": "text/csv",
+      "encoding": "utf-8",
+      "schema": "https://raw.githubusercontent.com/tdwg/camtrap-dp/0.1.6/deployments-table-schema.json"
+    },
+    {
+      "name": "media",
+      "path": "media.csv",
+      "profile": "tabular-data-resource",
+      "format": "csv",
+      "mediatype": "text/csv",
+      "encoding": "utf-8",
+      "schema": "https://raw.githubusercontent.com/tdwg/camtrap-dp/0.1.6/media-table-schema.json"
+    },
+    {
+      "name": "observations",
+      "path": "observations.csv",
+      "profile": "tabular-data-resource",
+      "format": "csv",
+      "mediatype": "text/csv",
+      "encoding": "utf-8",
+      "schema": "https://raw.githubusercontent.com/tdwg/camtrap-dp/0.1.6/observations-table-schema.json"
+    }
+  ]
+}

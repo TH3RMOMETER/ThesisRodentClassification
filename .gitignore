@@ -1,0 +1,9 @@
+/VocalMat
+/usvseg
+/USV_Python
+/imgs
+*.flac
+*.pkl
+*.nc
+*.xlsx
+*.csv

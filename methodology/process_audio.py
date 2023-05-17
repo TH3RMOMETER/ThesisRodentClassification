@@ -1,16 +1,18 @@
 import time
 from sys import getsizeof
+from typing import List
 
 import audioread
 import numpy as np
 import pandas as pd
-import polars as pl
 import soundfile
 import xarray as xr
 from scipy import signal, stats
 from skimage import util
 from tqdm import tqdm
 import librosa
+
+import uuid
 
 # open flac file from certain point in time
 
@@ -29,7 +31,7 @@ def get_sample_rate(file_path: str) -> int:
 
 def convert_seconds_to_frames_in_audiofile(s: int, sample_rate: int) -> int:
     """Converts seconds to frames in audio file"""
-    return s*sample_rate
+    return round(s*sample_rate)
 
 
 def open_flac_file(end_time, file_path: str, start_time: int = 0) -> tuple[np.ndarray, int]:
@@ -42,9 +44,19 @@ def open_flac_file(end_time, file_path: str, start_time: int = 0) -> tuple[np.nd
         end_time, get_sample_rate(file_path))
     audio, sample_rate = soundfile.read(
         file_path, start=start_time, stop=end_time)
-    # print length of audio file in seconds from start_time to end_time
-    print('Length of audio file: ' + str(audio.shape[0]/sample_rate) + ' sec')
     return audio, sample_rate
+
+
+def save_audio_file(audio: np.ndarray, sample_rate: int, output_path: str):
+    """Saves audio file to file_path"""
+    soundfile.write(output_path, audio, sample_rate)
+
+
+def save_audio_file_start_end(
+        output_path: str, start_time: int, end_time: int, file_path: str, index: int):
+    """Saves audio file to file_path"""
+    audio, sample_rate = open_flac_file(end_time, file_path, start_time)  # type: ignore
+    soundfile.write(f'{output_path}{str(uuid.uuid4())}_{index}.flac', audio, sample_rate)
 
 
 def create_slice_from_flac(
@@ -149,6 +161,8 @@ def create_xarray_dataset_from_mfcc(dic: dict, freqs_spec: np.ndarray, times: np
     return slices_Dataset
 
 # testing function
+
+
 def get_remainders(slices_Dataset, slices, step_size, samp_freq, sig_len):
     slice_remainder = np.ceil(
         (sig_len - (slices.shape[0] * slices.shape[1] * step_size / samp_freq))*1000)
@@ -292,7 +306,9 @@ def process_audio_MFCC(audio_path: str, slice_len: int, step_size: float,
     end = time.time()
     print(str('xarray created in ' + str(end - start) + '  seconds')) """
 
-    # create pandas dataframe with columns mfcc, mfcc_delta, mfcc_delta2    
-    slices_Dataset = pd.DataFrame.from_dict(spec_slices, orient='index', columns=['mfcc', 'mfcc_delta', 'mfcc_delta2'])
+    # create pandas dataframe with columns mfcc, mfcc_delta, mfcc_delta2
+    slices_Dataset = pd.DataFrame.from_dict(spec_slices, orient='index', columns=[
+                                            'mfcc', 'mfcc_delta', 'mfcc_delta2'])
     # convert dataset to pickle
-    slices_Dataset.to_pickle(output_path + audio_path.split("\\")[-1].split(".")[0] + f'_{index}' '.pkl')
+    slices_Dataset.to_pickle(
+        output_path + audio_path.split("\\")[-1].split(".")[0] + f'_{index}' '.pkl')

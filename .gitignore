@@ -2,6 +2,8 @@
 /usvseg
 /USV_Python
 /imgs
+/DeepSqueak
+/audio_data
 *.flac
 *.pkl
 *.nc

@@ -1,37 +1,95 @@
-from load_agouti import (load_and_filter_agouti_data, convert_filtered_data_into_list_with_start_and_end_times,
-                         create_list_with_start_and_end_times, create_list_with_random_start_and_end_times)
-from process_audio import process_audio_NFFT, process_audio_MFCC
+import os
+from typing import List
+
+from load_agouti import (
+    convert_filtered_data_into_list_with_start_and_end_times,
+    create_list_with_random_start_and_end_times,
+    create_list_with_start_and_end_times, load_and_filter_agouti_data)
+from config import Config
+from process_audio import process_audio_MFCC, save_audio_file_start_end
 
 
-def run():
-    # load in agouti data
-    audiopath = r'C:\Users\gijst\Documents\Master Data Science\Thesis\flevopark_1_audio1_2021-09-28_16-00-00_(0).flac'
+def create_audio_points(config: Config, audio_file_path: str):
+    """Create audio points from agouti data
 
-    agouti_media = r'C:\Users\gijst\Documents\Master Data Science\Thesis\flevopark-20230202124032\media.csv'
-    agouti_observations = r'C:\Users\gijst\Documents\Master Data Science\Thesis\flevopark-20230202124032\observations.csv'
+    Args:
+        config (Config): Config object with all variables
 
-    output_path = r'C:\Users\gijst\Documents\Master Data Science\Thesis\processed_data'
-
-    slice_len = 25
-    step_size = 0.9
-
+    Returns:
+        (List, List): List with audio points from agouti data, list with random audio points
+    """
     agouti = load_and_filter_agouti_data(
-        media_filepath=agouti_media, observations_filepath=agouti_observations, audio_file_path=audiopath)
+        media_filepath=config.agouti_media_path, observations_filepath=config.agouti_observations_path, audio_file_path=audio_file_path)
     audio_points = convert_filtered_data_into_list_with_start_and_end_times(
-        agouti_filtered=agouti, audio_file_path=audiopath)
+        agouti_filtered=agouti, audio_file_path=audio_file_path)
     audio_points = create_list_with_start_and_end_times(
         audio_points=audio_points, difference=120)
     random_audio_points = create_list_with_random_start_and_end_times(
-        audio_ranges=audio_points, difference=120, audio_path=audiopath)
-    # for each point in audio_points, process audio
-    """ for index, point in enumerate(audio_points):
+        audio_ranges=audio_points, difference=120, audio_path=audio_file_path)
+    return audio_points, random_audio_points
+
+
+def create_mfcc_data(config: Config, audio_points: List, random_audio_points: List):
+    """Create MFCC data from audio points
+
+    Args:
+        config (Config): Config object with all variables
+        audio_points (List): list with audio points from agouti data
+        random_audio_points (List): list with random audio points
+    """
+    for index, point in enumerate(audio_points):
         process_audio_MFCC(
-            audio_path=audiopath, start_time=point[0], end_time=point[1], slice_len=slice_len, step_size=step_size, output_path=f'{output_path}\\rats\\', index=index) """
-    print(random_audio_points)
+            audio_path=config.audio_data_folder_path, start_time=point[0], end_time=point[1], slice_len=config.slice_len, step_size=config.step_size, output_path=f'{config.output_path}\\rats\\', index=index)
     for index, point in enumerate(random_audio_points):
         process_audio_MFCC(
-            audio_path=audiopath, start_time=point[0], end_time=point[1], slice_len=slice_len, step_size=step_size, output_path=f'{output_path}\\noise\\', index=index)
+            audio_path=config.audio_data_folder_path, start_time=point[0], end_time=point[1], slice_len=config.slice_len, step_size=config.step_size, output_path=f'{config.output_path}\\noise\\', index=index)
+
+
+def create_list_with_audio_filepaths_in_folder(folder_path: str):
+    """Create list with audio filepaths in folder
+
+    Args:
+        folder_path (str): path to folder with audio files
+
+    Returns:
+        List: list with audio filepaths
+    """
+    audio_filepaths = []
+    # only include .flac files
+    for file in os.listdir(folder_path):
+        if file.endswith(".flac"):
+            audio_filepaths.append(os.path.join(folder_path, file))
+    return audio_filepaths
+
+
+def save_audio_points_to_file(config: Config, audio_points: List, random_audio_points: List, file_path: str):
+    """Create MFCC data from audio points
+
+    Args:
+        config (Config): Config object with all variables
+        audio_points (List): list with audio points from agouti data
+        random_audio_points (List): list with random audio points
+    """
+    for index, point in enumerate(audio_points):
+        save_audio_file_start_end(
+            file_path=file_path, output_path=f'{config.cropped_audio_path}\\rats\\', index=index, start_time=point[0], end_time=point[1])
+    for index, point in enumerate(random_audio_points):
+        save_audio_file_start_end(
+            file_path=file_path, output_path=f'{config.cropped_audio_path}\\noise\\', index=index, start_time=point[0], end_time=point[1])
+
+
+def process_audio_folder(config: Config):
+    audio_filepaths = create_list_with_audio_filepaths_in_folder(
+        folder_path=config.audio_data_folder_path)
+    #  for each filepath create mfcc data
+    for filepath in audio_filepaths:
+        audio_points, random_audio_points = create_audio_points(
+            config=config, audio_file_path=filepath)
+        """ create_mfcc_data(config=config, audio_points=audio_points,
+                         random_audio_points=random_audio_points) """
+        save_audio_points_to_file(config=config, audio_points=audio_points,
+                                    random_audio_points=random_audio_points, file_path=filepath)
+        
 
 if __name__ == "__main__":
-
-    run()
+    process_audio_folder(config=Config())

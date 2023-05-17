@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 @dataclass
 class Config(object):
-    num_classes: int = 2
+    num_classes: int = 1
     batch_size: int = 32
     epochs: int = 10
     learning_rate: float = 0.001
@@ -20,16 +20,3 @@ class Config(object):
     output_path: str = (
         r"C:\Users\gijst\Documents\Master Data Science\Thesis\processed_data"
     )
-
-""" 
-def run(config: Config):
-    df = create_df_from_audio_filepaths(config)
-    dataset = AudioDataset(df=df, audio_length=5)
-    model = AudioModel()
-    x = 1
-
-
-# if main run
-if __name__ == "__main__":
-    run(Config())
- """

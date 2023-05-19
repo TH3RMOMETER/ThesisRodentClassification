@@ -1,14 +1,22 @@
 from dataclasses import dataclass
+import multiprocessing
+import torch
+from torchvision.models import resnet50, ResNet50_Weights
+from ultralytics import YOLO
+from yoloNetwork import load_model
 
 
 @dataclass
 class Config(object):
+    """Configuration class"""
+    model_type: str = "yolo"
     num_classes: int = 1
     batch_size: int = 32
     epochs: int = 10
     learning_rate: float = 0.001
     max_epochs: int = 100
     max_lr: float = 0.01
+    audio_length: int = 120
     audio_data_folder_path: str = (
         r"C:\Users\gijst\Documents\Master Data Science\Thesis\audio_data"
     )
@@ -20,3 +28,13 @@ class Config(object):
     output_path: str = (
         r"C:\Users\gijst\Documents\Master Data Science\Thesis\processed_data"
     )
+    # get number of cpus
+    num_cpus: int = multiprocessing.cpu_count()
+
+
+    def create_network(self):
+        """Create network"""
+        if self.model_type == "yolo":
+            return load_model(load_weights=True)
+        elif self.model_type == "resnet":
+            return resnet50(weights=ResNet50_Weights.DEFAULT)

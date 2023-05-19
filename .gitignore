@@ -9,3 +9,6 @@
 *.nc
 *.xlsx
 *.csv
+/wandb
+/lightning_logs
+*.ckpt

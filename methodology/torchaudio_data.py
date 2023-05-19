@@ -56,6 +56,8 @@ class AudioDataset(Dataset):
         spec_transforms=None,
         delta=False,
         delta_delta=False,
+        spectogram=False,
+        long=False,
     ):
         self.df = df
         self.file_paths = df["file_path"].values
@@ -68,6 +70,8 @@ class AudioDataset(Dataset):
         self.spec_transforms = spec_transforms
         self.delta = delta
         self.delta_delta = delta_delta
+        self.spectogram = spectogram
+        self.long = long
 
     def __len__(self):
         return len(self.df)
@@ -92,17 +96,28 @@ class AudioDataset(Dataset):
             # Pad
             audio = F.pad(audio, (0, self.num_samples - audio.shape[0]))
 
-        # Add any preprocessing you like here
-        # (e.g., noise removal, etc.)
-        ...
-
-        # Add any data augmentations for waveform you like here
-        # (e.g., noise injection, shifting time, changing speed and pitch)
-        ...
+        if self.spectogram:
+            # nftt in seconds
+            nftt = 0.0032
+            overlap = 0.0028
+            window = 0.0032
+            if self.long:
+                nftt = 0.01
+                overlap = 0.005
+                window = 0.01
+            # convert parameters in seconds to frames
+            nftt = int(nftt * self.target_sample_rate)
+            overlap = int(overlap * self.target_sample_rate)
+            window = int(window * self.target_sample_rate)
+            # convert audio to spectogram
+            spec = torchaudio.transforms.Spectrogram(
+                n_fft=nftt, win_length=window, hop_length=window
+            )(audio)
+            return (torch.stack([spec]), torch.tensor(self.labels[index]).float())
 
         # Convert to Mel spectrogram
         melspectrogram = T.MelSpectrogram(
-            sample_rate=self.target_sample_rate, n_mels=self.n_mfcc, hop_length=512
+            sample_rate=self.target_sample_rate, n_mels=self.n_mfcc
         )
         melspec = melspectrogram(audio)
 
@@ -147,11 +162,11 @@ class AudioModel(pl.LightningModule):
             groups=1,
             bias=True,
         )
-        self.model = nn.Sequential(first_conv_layer, self.model)
+        self.model = nn.Sequential(first_conv_layer, self.model) # type: ignore
 
     def forward(self, images):
         # return model output trough sigmoid
-        logits = self.model(images)
+        logits = self.model(images) # type: ignore
         logits = torch.sigmoid(logits)
         return logits
 
@@ -189,7 +204,7 @@ def create_model(config: Config, audio_shape: tuple):
         model.add(keras.layers.InputLayer(input_shape=list(audio_shape)))
         yolo_network = config.create_network()
         # remove input layer from yolo_network
-        yolo_network.layers.pop(0)
+        yolo_network.layers.pop(0)  # type: ignore
         # create convolutional layer that is compatible with yolo_network
         model.add(keras.layers.Dense(units=300, activation="relu", input_shape=list(audio_shape)))  # type: ignore
         # add yolo network
@@ -246,14 +261,14 @@ def train_keras_network(config: Config):
             x, y = x.numpy(), y.numpy()
             # Optimize the model
             loss_value, grads = grad(model, x, y)
-            optimizer_keras.apply_gradients(zip(grads, model.trainable_variables))
+            optimizer_keras.apply_gradients(zip(grads, model.trainable_variables)) # type: ignore
 
             # Track progress
             epoch_loss_avg.update_state(loss_value)  # Add current batch loss
             # Compare predicted label to actual label
             # training=True is needed only if there are layers with different
             # behavior during training versus inference (e.g. Dropout).
-            epoch_accuracy.update_state(y, model(x, training=True))
+            epoch_accuracy.update_state(y, model(x, training=True)) # type: ignore
 
         # End epoch
         train_loss_results.append(epoch_loss_avg.result())

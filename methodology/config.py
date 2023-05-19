@@ -9,7 +9,7 @@ from yoloNetwork import load_model
 @dataclass
 class Config(object):
     """Configuration class"""
-    model_type: str = "yolo"
+    model_type: str = "resnet"
     num_classes: int = 1
     batch_size: int = 32
     epochs: int = 10

@@ -2,14 +2,14 @@ from dataclasses import dataclass
 import multiprocessing
 import torch
 from torchvision.models import resnet50, ResNet50_Weights
-from ultralytics import YOLO
-from yoloNetwork import load_model
+import yoloNetwork
+import LongyoloNetwork
 
 
 @dataclass
 class Config(object):
     """Configuration class"""
-    model_type: str = "resnet"
+    model_type: str = "yolo"
     num_classes: int = 1
     batch_size: int = 32
     epochs: int = 10
@@ -35,6 +35,8 @@ class Config(object):
     def create_network(self):
         """Create network"""
         if self.model_type == "yolo":
-            return load_model(load_weights=True)
+            return yoloNetwork.load_model(load_weights=True)
+        elif self.model_type == "long_yolo":
+            return LongyoloNetwork.load_model(load_weights=True)
         elif self.model_type == "resnet":
             return resnet50(weights=ResNet50_Weights.DEFAULT)

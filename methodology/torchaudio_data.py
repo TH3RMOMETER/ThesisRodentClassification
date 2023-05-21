@@ -1,17 +1,21 @@
 import os
 import lightning.pytorch as pl
 import pandas as pd
+import numpy as np
 import tensorflow as tf
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
+from module import DataGenerator
+
 # Audio processing
 import torchaudio
 import torchaudio.transforms as T
 from config import Config
 from lightning.pytorch.loggers import WandbLogger
+from wandb.keras import WandbCallback
 from tensorflow import keras
 from torch.optim import lr_scheduler
 from torch.utils.data import DataLoader, Dataset
@@ -162,11 +166,12 @@ class AudioModel(pl.LightningModule):
             groups=1,
             bias=True,
         )
-        self.model = nn.Sequential(first_conv_layer, self.model) # type: ignore
+        self.model = nn.Sequential(first_conv_layer, self.model)  # type: ignore
+        # set last n layers to be trainable
 
     def forward(self, images):
         # return model output trough sigmoid
-        logits = self.model(images) # type: ignore
+        logits = self.model(images)  # type: ignore
         logits = torch.sigmoid(logits)
         return logits
 
@@ -199,85 +204,58 @@ class AudioModel(pl.LightningModule):
 
 def create_model(config: Config, audio_shape: tuple):
     if config.model_type == "yolo":
-        model = keras.Sequential()
-        # create input layer
-        model.add(keras.layers.InputLayer(input_shape=list(audio_shape)))
-        yolo_network = config.create_network()
-        # remove input layer from yolo_network
-        yolo_network.layers.pop(0)  # type: ignore
-        # create convolutional layer that is compatible with yolo_network
-        model.add(keras.layers.Dense(units=300, activation="relu", input_shape=list(audio_shape)))  # type: ignore
-        # add yolo network
-        model.add(yolo_network)
-        # add classification layer
-        model.add(keras.layers.Dense(1, activation="sigmoid"))  # type: ignore
-        model.compile(
+        yolo_network = config.create_network()                
+        yolo_network.compile(
             loss=keras.losses.BinaryCrossentropy(),
             optimizer=keras.optimizers.Adam(lr=1e-3),
             metrics=["accuracy"],
         )  # type: ignore
-        return model
+        return yolo_network
     elif config.model_type == "resnet":
         return AudioModel(input_shape=audio_shape)
     return
 
 
+class customKerasModel(keras.Model):
+    def train_step(self, data):
+        x, y = data
+        with tf.GradientTape() as tape:
+            y_pred = self(x, training=True)
+            loss = self.compiled_loss(y, y_pred, regularization_losses=self.losses)
+        trainable_vars = self.trainable_variables
+        gradients = tape.gradient(loss, trainable_vars)
+        self.optimizer.apply_gradients(zip(gradients, trainable_vars))
+        self.compiled_metrics.update_state(y, y_pred)
+        return {m.name: m.result() for m in self.metrics}
+
 def grad(model, inputs, targets):
     with tf.GradientTape() as tape:
-        loss_value = keras.losses.BinaryCrossentropy()(targets, model(inputs))
+        loss_value = keras.losses.BinaryCrossentropy()(targets, tf.squeeze(model(inputs)))
     return loss_value, tape.gradient(loss_value, model.trainable_variables)
 
 
 def train_keras_network(config: Config):
     audio_df = create_df_from_audio_filepaths(config)
-    audio_df = AudioDataset(audio_df, config.audio_length)
+    audio_df = AudioDataset(audio_df, config.audio_length, spectogram=True)
     # split dataset
     train_set, val_set = torch.utils.data.random_split(audio_df, [5, 1])  # type: ignore
+    # create dataloaders
+    train_loader = DataLoader(train_set, batch_size=2, shuffle=True)
+    val_loader = DataLoader(val_set, batch_size=2, shuffle=False)
 
     # get shape of audio data, for input shape of model
     audio, _ = train_set[0]
     audio_shape = audio.shape
 
     # create wandb logger
-    # wandb_logger = wandb.keras.WandbCallback()
-    optimizer_keras = keras.optimizers.Adam(lr=1e-3)
+    run = wandb.init(project="test_rat_USV", reinit=True)
 
     model = create_model(config, audio_shape)
-
-    ## Note: Rerunning this cell uses the same model parameters
-
-    # Keep results for plotting
-    train_loss_results = []
-    train_accuracy_results = []
-
-    num_epochs = 10
-
-    for epoch in trange(num_epochs):
-        epoch_loss_avg = tf.keras.metrics.Mean()
-        epoch_accuracy = tf.keras.metrics.BinaryAccuracy()
-
-        # Training loop - using batches of 32
-        for x, y in audio_df:
-            x, y = x.numpy(), y.numpy()
-            # Optimize the model
-            loss_value, grads = grad(model, x, y)
-            optimizer_keras.apply_gradients(zip(grads, model.trainable_variables)) # type: ignore
-
-            # Track progress
-            epoch_loss_avg.update_state(loss_value)  # Add current batch loss
-            # Compare predicted label to actual label
-            # training=True is needed only if there are layers with different
-            # behavior during training versus inference (e.g. Dropout).
-            epoch_accuracy.update_state(y, model(x, training=True)) # type: ignore
-
-        # End epoch
-        train_loss_results.append(epoch_loss_avg.result())
-        train_accuracy_results.append(epoch_accuracy.result())
-        print(
-            "Epoch {}: Loss: {:.3f}, Accuracy: {:.3%}".format(
-                epoch + 1, epoch_loss_avg.result(), epoch_accuracy.result()
-            )
-        )
+    # convert torch loader to keras compatible object
+    train_loader = DataGenerator(train_loader, 2)
+    val_loader = DataGenerator(val_loader, 2)
+    model.fit_generator(train_loader, epochs=10, validation_data=val_loader, callbacks=[WandbCallback()])  # type: ignore   
+    run.finish()
 
 
 def train_torch_network(config: Config):
@@ -305,10 +283,8 @@ def train_torch_network(config: Config):
     )
 
     # create dataloaders
-    train_loader = DataLoader(
-        train_set, batch_size=1, shuffle=True, num_workers=num_cpus
-    )
-    val_loader = DataLoader(val_set, batch_size=1, shuffle=False, num_workers=num_cpus)
+    train_loader = DataLoader(train_set, batch_size=1, shuffle=True)
+    val_loader = DataLoader(val_set, batch_size=1, shuffle=False)
 
     # train the model
     trainer.fit(audio_model, train_loader, val_loader)

@@ -57,14 +57,17 @@ def loadWeights(
                     weightList[weightNum] = tf.constant(dataset[()], shape=shp)
                 # Assign the weights into the layer
                 for w in range(numVars):
-                    if debug:
-                        print("Copying variable of shape:")
-                        print(weightList[w].shape)
-                    layer.variables[w].assign(weightList[w])
-                    if debug:
-                        print("Assignment successful.")
-                        print("Set variable value:")
-                        print(layer.variables[w])
+                    try:
+                        if debug:
+                            print("Copying variable of shape:")
+                            print(weightList[w].shape)
+                        layer.variables[w].assign(weightList[w])
+                        if debug:
+                            print("Assignment successful.")
+                            print("Set variable value:")
+                            print(layer.variables[w])
+                    except ValueError:
+                        continue
 
 
 def layerNum(model, layerName):

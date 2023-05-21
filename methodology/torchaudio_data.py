@@ -1,25 +1,26 @@
 import os
+
 import lightning.pytorch as pl
-import pandas as pd
 import numpy as np
+import pandas as pd
 import tensorflow as tf
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
-from module import DataGenerator
-
 # Audio processing
 import torchaudio
 import torchaudio.transforms as T
 from config import Config
 from lightning.pytorch.loggers import WandbLogger
-from wandb.keras import WandbCallback
+from module import DataGenerator
 from tensorflow import keras
 from torch.optim import lr_scheduler
 from torch.utils.data import DataLoader, Dataset
+from torchmetrics.functional import accuracy
 from tqdm.notebook import trange
+from wandb.keras import WandbCallback
 
 # Pre-trained image models
 import wandb
@@ -181,30 +182,36 @@ class AudioModel(pl.LightningModule):
         return [optimizer], [scheduler]
 
     def training_step(self, batch, batch_idx):
-        images, labels = batch
-        outputs = self(images)
-        loss = F.binary_cross_entropy(outputs, labels.unsqueeze(1))
+        logits, loss, acc = self._get_preds_loss_accuracy(batch)
         self.log("train_loss", loss)
+        self.log("train_acc", acc)
         return loss
 
     def validation_step(self, batch, batch_idx):
-        images, labels = batch
-        outputs = self(images)
-        loss = F.binary_cross_entropy(outputs, labels.unsqueeze(1))
+        logits, loss, acc = self._get_preds_loss_accuracy(batch)
         self.log("val_loss", loss)
+        self.log("val_acc", acc)
         return loss
 
     def test_step(self, batch, batch_idx):
-        images, labels = batch
-        outputs = self(images)
-        loss = F.binary_cross_entropy(outputs, labels.unsqueeze(1))
+        logits, loss, acc = self._get_preds_loss_accuracy(batch)
         self.log("test_loss", loss)
+        self.log("test_acc", acc)
         return loss
+
+    def _get_preds_loss_accuracy(self, batch):
+        '''convenience function since train/valid/test steps are similar'''
+        x, y = batch
+        logits = self(x)
+        loss = F.binary_cross_entropy(logits, y.unsqueeze(1))
+        acc = accuracy(logits, y.unsqueeze(1), task="binary")
+        return logits, loss, acc
+    
 
 
 def create_model(config: Config, audio_shape: tuple):
     if config.model_type == "yolo":
-        yolo_network = config.create_network()                
+        yolo_network = config.create_network()
         yolo_network.compile(
             loss=keras.losses.BinaryCrossentropy(),
             optimizer=keras.optimizers.Adam(lr=1e-3),
@@ -216,29 +223,21 @@ def create_model(config: Config, audio_shape: tuple):
     return
 
 
-class customKerasModel(keras.Model):
-    def train_step(self, data):
-        x, y = data
-        with tf.GradientTape() as tape:
-            y_pred = self(x, training=True)
-            loss = self.compiled_loss(y, y_pred, regularization_losses=self.losses)
-        trainable_vars = self.trainable_variables
-        gradients = tape.gradient(loss, trainable_vars)
-        self.optimizer.apply_gradients(zip(gradients, trainable_vars))
-        self.compiled_metrics.update_state(y, y_pred)
-        return {m.name: m.result() for m in self.metrics}
-
-def grad(model, inputs, targets):
-    with tf.GradientTape() as tape:
-        loss_value = keras.losses.BinaryCrossentropy()(targets, tf.squeeze(model(inputs)))
-    return loss_value, tape.gradient(loss_value, model.trainable_variables)
+def create_train_test_val_split(audio_df: AudioDataset) -> tuple:
+    train_size = int(0.8 * len(audio_df))
+    val_size = int(0.1 * len(audio_df))
+    test_size = len(audio_df) - train_size - val_size
+    train_set, val_set, test_set = torch.utils.data.random_split(  # type: ignore
+        audio_df, [train_size, val_size, test_size]
+    )
+    return train_set, val_set, test_set
 
 
 def train_keras_network(config: Config):
     audio_df = create_df_from_audio_filepaths(config)
     audio_df = AudioDataset(audio_df, config.audio_length, spectogram=True)
     # split dataset
-    train_set, val_set = torch.utils.data.random_split(audio_df, [5, 1])  # type: ignore
+    train_set, val_set, test_set = create_train_test_val_split(audio_df)
     # create dataloaders
     train_loader = DataLoader(train_set, batch_size=2, shuffle=True)
     val_loader = DataLoader(val_set, batch_size=2, shuffle=False)
@@ -254,7 +253,7 @@ def train_keras_network(config: Config):
     # convert torch loader to keras compatible object
     train_loader = DataGenerator(train_loader, 2)
     val_loader = DataGenerator(val_loader, 2)
-    model.fit_generator(train_loader, epochs=10, validation_data=val_loader, callbacks=[WandbCallback()])  # type: ignore   
+    model.fit_generator(train_loader, epochs=10, validation_data=val_loader, callbacks=[WandbCallback()])  # type: ignore
     run.finish()
 
 
@@ -262,9 +261,14 @@ def train_torch_network(config: Config):
     num_cpus = config.num_cpus
     # create dataset
     audio_df = create_df_from_audio_filepaths(config)
-    audio_df = AudioDataset(audio_df, config.audio_length)
+    audio_df = AudioDataset(
+        audio_df,
+        config.audio_length,
+        delta=config.delta,
+        delta_delta=config.delta_delta,
+    )
     # split dataset
-    train_set, val_set = torch.utils.data.random_split(audio_df, [5, 1])  # type: ignore
+    train_set, val_set, test_set = create_train_test_val_split(audio_df)
 
     # get shape of audio data, for input shape of model
     audio, _ = train_set[0]
@@ -287,14 +291,14 @@ def train_torch_network(config: Config):
     val_loader = DataLoader(val_set, batch_size=1, shuffle=False)
 
     # train the model
-    trainer.fit(audio_model, train_loader, val_loader)
+    trainer.fit(model=audio_model, train_dataloaders=train_loader, val_dataloaders=val_loader)
 
     # stop wandb run
 
 
 if __name__ == "__main__":
     config = Config()
-    if config.model_type == "yolo":
+    if config.model_type == "yolo" or config.model_type == "long_yolo":
         train_keras_network(config)
     elif config.model_type == "resnet":
         train_torch_network(config)

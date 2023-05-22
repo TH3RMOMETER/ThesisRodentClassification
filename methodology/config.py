@@ -10,7 +10,7 @@ from ast_models import ASTModel
 @dataclass
 class Config(object):
     """Configuration class"""
-    model_type: str = "resnet"
+    model_type: str = "ast_model"
     delta: bool = False
     delta_delta: bool = True
     num_classes: int = 1
@@ -45,4 +45,4 @@ class Config(object):
             return resnet50(weights=ResNet50_Weights.DEFAULT)
         elif self.model_type == "ast_model":
             # input shape = (batch_size, time_frame_num, frequency_bins), e.g., (12, 1024, 128)
-            return ASTModel(label_dim=2, input_fdim=52, input_tdim=37648, audioset_pretrain=True)
+            return ASTModel(label_dim=1, input_fdim=52, input_tdim=37648, audioset_pretrain=True)

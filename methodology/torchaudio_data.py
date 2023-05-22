@@ -1,28 +1,28 @@
 import os
 
 import lightning.pytorch as pl
-import numpy as np
 import pandas as pd
 import tensorflow as tf
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-
 # Audio processing
 import torchaudio
 import torchaudio.transforms as T
 from config import Config
 from lightning.pytorch.loggers import WandbLogger
-from module import DataGenerator
+from module import (DataGenerator, ImagePredictionLogger, f1_m, precision_m,
+                    recall_m)
 from tensorflow import keras
 from torch.optim import lr_scheduler
 from torch.utils.data import DataLoader, Dataset
+from torchmetrics import Accuracy
+from torchmetrics.classification import (BinaryAUROC, BinaryF1Score,
+                                         precision_recall)
 from torchmetrics.functional import accuracy
-from tqdm.notebook import trange
 from wandb.keras import WandbCallback
 
-# Pre-trained image models
 import wandb
 
 
@@ -134,10 +134,6 @@ class AudioDataset(Dataset):
             melspec = torchaudio.transforms.ComputeDeltas()(melspec)
             melspec = torchaudio.transforms.ComputeDeltas()(melspec)
 
-        # Add any data augmentations for spectrogram you like here
-        # (e.g., Mixup, cutmix, time masking, frequency masking)
-        ...
-
         return (torch.stack([melspec]), torch.tensor(self.labels[index]).float())
 
 
@@ -149,14 +145,9 @@ class AudioModel(pl.LightningModule):
         config: Config = Config(),
     ):
         super().__init__()
-
-        # self.model = timm.create_model(model_name, pretrained=pretrained, in_chans=1)
         self.model = config.create_network()
-        in_features = self.model.fc.in_features
+        in_features = self.model.fc.in_features  # type: ignore
         self.model.fc = nn.Sequential(nn.Linear(in_features, num_classes))  # type: ignore
-        # self.model[-1] = nn.Sequential(nn.Linear(256, num_classes))  # type: ignore
-        """ self.in_features = self.model.classifier.in_features
-        self.model.classifier = nn.Sequential(nn.Linear(self.in_features, num_classes)) """
         first_conv_layer = nn.Conv2d(
             input_shape[0],
             3,
@@ -168,7 +159,17 @@ class AudioModel(pl.LightningModule):
             bias=True,
         )
         self.model = nn.Sequential(first_conv_layer, self.model)  # type: ignore
-        # set last n layers to be trainable
+
+        # metrics
+        self.train_acc = Accuracy(task="binary")
+        self.val_acc = Accuracy(task="binary")
+        self.test_acc = Accuracy(task="binary")
+        self.val_f1 = BinaryF1Score()
+        self.test_f1 = BinaryF1Score()
+        self.val_auc_roc = BinaryAUROC()
+        self.test_auc_roc = BinaryAUROC()
+
+        self.save_hyperparameters()
 
     def forward(self, images):
         # return model output trough sigmoid
@@ -176,50 +177,90 @@ class AudioModel(pl.LightningModule):
         logits = torch.sigmoid(logits)
         return logits
 
+    def loss(self, xs, ys):
+        logits = self(xs)  # this calls self.forward
+        loss = F.binary_cross_entropy(logits, ys)
+        return logits, loss
+
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=0.001)
-        scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=20)
-        return [optimizer], [scheduler]
+        scheduler = lr_scheduler.ReduceLROnPlateau(optimizer)
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": scheduler,  # Changed scheduler to lr_scheduler
+            "monitor": "val_loss",
+        }
 
     def training_step(self, batch, batch_idx):
-        logits, loss, acc = self._get_preds_loss_accuracy(batch)
-        self.log("train_loss", loss)
-        self.log("train_acc", acc)
+        x, y = batch
+        logits, loss = self.loss(x, y.unsqueeze(1))
+        self.train_acc(logits, y.unsqueeze(1))
+        self.log("train_loss", loss, on_epoch=True)
+        self.log("train_acc", self.train_acc, on_epoch=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
-        logits, loss, acc = self._get_preds_loss_accuracy(batch)
-        self.log("val_loss", loss)
-        self.log("val_acc", acc)
-        return loss
+        x, y = batch
+        logits, loss = self.loss(x, y.unsqueeze(1))
+        self.val_acc(logits, y.unsqueeze(1))
+        precision = precision_recall.BinaryPrecision()(logits, y.unsqueeze(1))
+        recall = precision_recall.BinaryRecall()(logits, y.unsqueeze(1))
+        f1_score = BinaryF1Score()(logits, batch[1].unsqueeze(1))
+        auc_roc = BinaryAUROC()(logits, batch[1].unsqueeze(1))
+        self.log("val_auc_roc", auc_roc, on_step=False, on_epoch=True)
+        self.log("val_precision", precision, on_step=False, on_epoch=True)
+        self.log("val_recall", recall, on_step=False, on_epoch=True)
+        self.log("val_f1", f1_score, on_step=False, on_epoch=True)
+        self.log("val_loss", loss, on_step=False, on_epoch=True)
+        self.log("val_acc", self.val_acc, on_step=False, on_epoch=True)
+        return logits
+
+    def on_validation_epoch_end(self, validation_step_outputs):
+        flattened_logits = torch.flatten(torch.cat(validation_step_outputs))
+        self.logger.experiment.log(  # type: ignore
+            {
+                "valid/logits": wandb.Histogram(flattened_logits.to("cpu")),  # type: ignore
+                "global_step": self.global_step,
+            }
+        )
 
     def test_step(self, batch, batch_idx):
-        logits, loss, acc = self._get_preds_loss_accuracy(batch)
-        self.log("test_loss", loss)
-        self.log("test_acc", acc)
-        return loss
-
-    def _get_preds_loss_accuracy(self, batch):
-        '''convenience function since train/valid/test steps are similar'''
         x, y = batch
-        logits = self(x)
-        loss = F.binary_cross_entropy(logits, y.unsqueeze(1))
-        acc = accuracy(logits, y.unsqueeze(1), task="binary")
-        return logits, loss, acc
-    
+        logits, loss = self.loss(x, y.unsqueeze(1))
+        self.test_acc(logits, y.unsqueeze(1))
+        precision = precision_recall.BinaryPrecision()(logits, y.unsqueeze(1))
+        recall = precision_recall.BinaryRecall()(logits, y.unsqueeze(1))
+        f1_score = BinaryF1Score()(logits, batch[1].unsqueeze(1))
+        auc_roc = BinaryAUROC()(logits, batch[1].unsqueeze(1))
+        self.log("test_auc_roc", auc_roc, on_step=False, on_epoch=True)
+        self.log("test_precision", precision, on_step=False, on_epoch=True)
+        self.log("test_recall", recall, on_step=False, on_epoch=True)
+        self.log("test_f1", f1_score, on_step=False, on_epoch=True)
+        self.log("test_loss", loss, on_step=False, on_epoch=True)
+        self.log("test_acc", self.val_acc, on_step=False, on_epoch=True)
+        return logits
 
 
 def create_model(config: Config, audio_shape: tuple):
     if config.model_type == "yolo":
         yolo_network = config.create_network()
-        yolo_network.compile(
+        yolo_network.compile(  # type: ignore
             loss=keras.losses.BinaryCrossentropy(),
             optimizer=keras.optimizers.Adam(lr=1e-3),
-            metrics=["accuracy"],
+            metrics=[
+                keras.metrics.BinaryAccuracy(),
+                keras.metrics.AUC(),
+                f1_m,
+                precision_m,
+                recall_m,
+            ],
         )  # type: ignore
         return yolo_network
     elif config.model_type == "resnet":
         return AudioModel(input_shape=audio_shape)
+    elif config.model_type == "ast_model":
+        ast_network = config.create_network()
+        return ast_network
     return
 
 
@@ -254,7 +295,7 @@ def train_keras_network(config: Config):
     train_loader = DataGenerator(train_loader, 2)
     val_loader = DataGenerator(val_loader, 2)
     model.fit_generator(train_loader, epochs=10, validation_data=val_loader, callbacks=[WandbCallback()])  # type: ignore
-    run.finish()
+    run.finish()  # type: ignore
 
 
 def train_torch_network(config: Config):
@@ -275,30 +316,42 @@ def train_torch_network(config: Config):
     audio_shape = audio.shape
 
     # create wandb logger
-    wandb_logger = WandbLogger(project="test_rat_USV", log_model="all")
+    # wandb_logger = WandbLogger(project="test_rat_USV", log_model="all")    
 
     # create model and trainer
-    audio_model = AudioModel(input_shape=audio_shape)
+    if config.model_type == "resnet":
+        audio_model = AudioModel(input_shape=audio_shape)
+    elif config.model_type == "ast_model":
+        audio_model = config.create_network()    
+
+    # create dataloaders
+    train_loader = DataLoader(train_set, batch_size=1, shuffle=True)
+    val_loader = DataLoader(val_set, batch_size=1, shuffle=False)
+    image_loader = DataLoader(train_set, batch_size=1, shuffle=True)
+
+    # copy a few samples for image prediction logger
+    imgs = []
+    labels = []
+    for image, label in image_loader:
+        imgs.append(image)
+        labels.append(label)
+    samples = (torch.cat(imgs), torch.cat(labels))
+
     trainer = pl.Trainer(
         max_epochs=config.epochs,
         logger=wandb_logger,
         log_every_n_steps=1,
         accelerator="gpu",
+        callbacks=[ImagePredictionLogger(samples)],
     )
-
-    # create dataloaders
-    train_loader = DataLoader(train_set, batch_size=1, shuffle=True)
-    val_loader = DataLoader(val_set, batch_size=1, shuffle=False)
-
     # train the model
-    trainer.fit(model=audio_model, train_dataloaders=train_loader, val_dataloaders=val_loader)
-
-    # stop wandb run
-
+    trainer.fit(
+        model=audio_model, train_dataloaders=train_loader, val_dataloaders=val_loader
+    )
 
 if __name__ == "__main__":
     config = Config()
     if config.model_type == "yolo" or config.model_type == "long_yolo":
         train_keras_network(config)
-    elif config.model_type == "resnet":
+    elif config.model_type == "resnet" or config.model_type == "ast_model":
         train_torch_network(config)

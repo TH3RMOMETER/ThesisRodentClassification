@@ -1,4 +1,9 @@
+from doctest import master
+from email.mime import audio
 import os
+
+import sys
+sys.path.append(r"C:\Users\gijst\Documents\Master Data Science\Thesis")
 
 import lightning.pytorch as pl
 import pandas as pd
@@ -7,19 +12,20 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+
 # Audio processing
 import torchaudio
 import torchaudio.transforms as T
 from config import Config
+from ast_master.src.dataloader import AudiosetDataset
+from ast_master.src.models import ASTModel
 from lightning.pytorch.loggers import WandbLogger
-from module import (DataGenerator, ImagePredictionLogger, f1_m, precision_m,
-                    recall_m)
+from module import DataGenerator, ImagePredictionLogger, f1_m, precision_m, recall_m
 from tensorflow import keras
 from torch.optim import lr_scheduler
 from torch.utils.data import DataLoader, Dataset
 from torchmetrics import Accuracy
-from torchmetrics.classification import (BinaryAUROC, BinaryF1Score,
-                                         precision_recall)
+from torchmetrics.classification import BinaryAUROC, BinaryF1Score, precision_recall
 from torchmetrics.functional import accuracy
 from wandb.keras import WandbCallback
 
@@ -118,6 +124,7 @@ class AudioDataset(Dataset):
             spec = torchaudio.transforms.Spectrogram(
                 n_fft=nftt, win_length=window, hop_length=window
             )(audio)
+
             return (torch.stack([spec]), torch.tensor(self.labels[index]).float())
 
         # Convert to Mel spectrogram
@@ -274,6 +281,78 @@ def create_train_test_val_split(audio_df: AudioDataset) -> tuple:
     return train_set, val_set, test_set
 
 
+def custom_collate(batch):
+    data = [item[0] for item in batch]
+    target = [item[1] for item in batch]
+    target = torch.LongTensor(target)
+    return [data, target]
+
+def create_ast_data_and_model(config: Config):
+    audio_conf = {
+        "num_mel_bins": 128,
+        "target_length": config.audio_length,
+        "freqm": 0,
+        "timem": 0,
+        "mixup": 0,
+        "mode": "train",
+        "mean": 4.2677393,
+        "std": 4.5689974,
+        "noise": False,
+    }
+    audio_df = create_df_from_audio_filepaths(config)
+    audio_data_set = AudiosetDataset(audio_df, audio_conf)
+    train_set, val_set, test_set = create_train_test_val_split(audio_data_set)
+    train_loader = torch.utils.data.DataLoader(
+        train_set,
+        batch_size=config.batch_size,
+        shuffle=True,
+        num_workers=4,
+        pin_memory=True,
+        # collate_fn=custom_collate
+    )
+    val_loader = torch.utils.data.DataLoader(
+        val_set,
+        batch_size=config.batch_size,
+        shuffle=False,
+        num_workers=4,
+        pin_memory=True,
+        collate_fn=custom_collate
+    )
+
+    test_loader = torch.utils.data.DataLoader(
+        test_set,
+        batch_size=config.batch_size,
+        shuffle=False,
+        num_workers=4,
+        pin_memory=True,
+        collate_fn=custom_collate
+    )
+
+    audio_model = ASTModel(
+        label_dim=1,
+        input_fdim=128,
+        input_tdim=config.audio_length,
+        imagenet_pretrain=True,
+        audioset_pretrain=True,
+    )
+
+    return audio_model, train_loader, val_loader, test_loader
+
+
+def train_ast_model(config: Config):
+    audio_model, train_loader, val_loader, test_loader = create_ast_data_and_model(
+        config
+    )
+    # wandb_logger = WandbLogger(project="test_rat_USV", reinit=True)
+    trainer = pl.Trainer(
+        max_epochs=config.epochs,
+        # logger=wandb_logger,
+        log_every_n_steps=1,
+        accelerator="gpu"
+    )
+    trainer.fit(audio_model, train_loader, val_loader)
+    trainer.test(audio_model, test_loader)
+
 def train_keras_network(config: Config):
     audio_df = create_df_from_audio_filepaths(config)
     audio_df = AudioDataset(audio_df, config.audio_length, spectogram=True)
@@ -316,17 +395,16 @@ def train_torch_network(config: Config):
     audio_shape = audio.shape
 
     # create wandb logger
-    # wandb_logger = WandbLogger(project="test_rat_USV", log_model="all")    
+    # wandb_logger = WandbLogger(project="test_rat_USV", log_model="all")
 
     # create model and trainer
     if config.model_type == "resnet":
         audio_model = AudioModel(input_shape=audio_shape)
-    elif config.model_type == "ast_model":
-        audio_model = config.create_network()    
 
     # create dataloaders
     train_loader = DataLoader(train_set, batch_size=1, shuffle=True)
     val_loader = DataLoader(val_set, batch_size=1, shuffle=False)
+    test_loader = DataLoader(test_set, batch_size=1, shuffle=False)
     image_loader = DataLoader(train_set, batch_size=1, shuffle=True)
 
     # copy a few samples for image prediction logger
@@ -339,19 +417,22 @@ def train_torch_network(config: Config):
 
     trainer = pl.Trainer(
         max_epochs=config.epochs,
-        logger=wandb_logger,
+        # logger=wandb_logger,
         log_every_n_steps=1,
-        accelerator="gpu",
-        callbacks=[ImagePredictionLogger(samples)],
+        accelerator="gpu"
     )
     # train the model
     trainer.fit(
         model=audio_model, train_dataloaders=train_loader, val_dataloaders=val_loader
     )
+    trainer.test(audio_model, test_loader)
+
 
 if __name__ == "__main__":
     config = Config()
     if config.model_type == "yolo" or config.model_type == "long_yolo":
         train_keras_network(config)
-    elif config.model_type == "resnet" or config.model_type == "ast_model":
+    elif config.model_type == "resnet":
         train_torch_network(config)
+    elif config.model_type == "ast_model":
+        train_ast_model(config)

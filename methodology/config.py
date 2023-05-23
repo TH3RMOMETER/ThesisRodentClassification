@@ -14,7 +14,7 @@ class Config(object):
     delta: bool = False
     delta_delta: bool = True
     num_classes: int = 1
-    batch_size: int = 32
+    batch_size: int = 1
     epochs: int = 10
     learning_rate: float = 0.001
     max_epochs: int = 100
@@ -33,6 +33,8 @@ class Config(object):
     )
     # get number of cpus
     num_cpus: int = multiprocessing.cpu_count()
+    audio_length: int = 23998
+    target_sample_rate: int = 32000
 
 
     def create_network(self):

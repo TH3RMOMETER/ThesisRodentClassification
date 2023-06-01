@@ -1,5 +1,5 @@
 from datetime import datetime
-
+import random
 import audioread
 import numpy as np
 import pandas as pd
@@ -119,18 +119,16 @@ def create_list_with_random_start_and_end_times(audio_ranges: list, difference: 
 
     # get duration of audio file
     totalsec = get_audio_file_length(audio_path)
-    # get sample rate of audio file
-    sample_rate = get_sample_rate(audio_path)
     # create list with random start and end times that are within the audio file and not within audio_points
     audio_points_with_difference = []
 
     for _ in range(len(audio_ranges)):
         # create random point between 0 and totalsec as integer
-        random_point = int(np.random.uniform(0, totalsec))
+        random_point = random.randint(0, totalsec)
         # add difference to random point
         random_range = (random_point - difference, random_point + difference)
         # check if random range is within one of the ranges in audio_ranges or within audio_points_with_difference
-        while any([random_range[0] <= range[1] and random_range[1] >= range[0] for range in audio_ranges]) or any([random_range[0] <= range[1] and random_range[1] >= range[0] for range in audio_points_with_difference]):
+        while any(random_range[0] <= r[1] and random_range[1] >= r[0] for r in audio_ranges + audio_points_with_difference):
             # create new random point
             random_point = np.random.uniform(0, totalsec)
             # add difference to random point

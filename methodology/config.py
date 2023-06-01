@@ -11,7 +11,7 @@ from ast_models import ASTModel
 class Config(object):
     """Configuration class"""
     model_type: str = "ast_model"
-    delta: bool = False
+    delta: bool = True
     delta_delta: bool = True
     num_classes: int = 1
     batch_size: int = 1
@@ -37,10 +37,10 @@ class Config(object):
     target_sample_rate: int = 32000
 
 
-    def create_network(self):
+    def create_network(self, shape=[37648,52,1]):
         """Create network"""
         if self.model_type == "yolo":
-            return yoloNetwork.load_model(load_weights=True)
+            return yoloNetwork.load_model(shape=shape, load_weights=True)
         elif self.model_type == "long_yolo":
             return LongyoloNetwork.load_model(load_weights=True)
         elif self.model_type == "resnet":

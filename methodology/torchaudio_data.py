@@ -3,6 +3,7 @@ from email.mime import audio
 import os
 
 import sys
+
 sys.path.append(r"C:\Users\gijst\Documents\Master Data Science\Thesis")
 
 import lightning.pytorch as pl
@@ -67,7 +68,7 @@ class AudioDataset(Dataset):
         spec_transforms=None,
         delta=False,
         delta_delta=False,
-        spectogram=False,
+        spectrogram=False,
         long=False,
     ):
         self.df = df
@@ -81,7 +82,7 @@ class AudioDataset(Dataset):
         self.spec_transforms = spec_transforms
         self.delta = delta
         self.delta_delta = delta_delta
-        self.spectogram = spectogram
+        self.spectrogram = spectrogram
         self.long = long
 
     def __len__(self):
@@ -107,7 +108,7 @@ class AudioDataset(Dataset):
             # Pad
             audio = F.pad(audio, (0, self.num_samples - audio.shape[0]))
 
-        if self.spectogram:
+        if self.spectrogram:
             # nftt in seconds
             nftt = 0.0032
             overlap = 0.0028
@@ -120,28 +121,26 @@ class AudioDataset(Dataset):
             nftt = int(nftt * self.target_sample_rate)
             overlap = int(overlap * self.target_sample_rate)
             window = int(window * self.target_sample_rate)
-            # convert audio to spectogram
+            # convert audio to spectrogram
             spec = torchaudio.transforms.Spectrogram(
-                n_fft=nftt, win_length=window, hop_length=window
+                n_fft=nftt, win_length=window, hop_length=window, normalized=True
             )(audio)
 
             return (torch.stack([spec]), torch.tensor(self.labels[index]).float())
 
-        # Convert to Mel spectrogram
-        melspectrogram = T.MelSpectrogram(
-            sample_rate=self.target_sample_rate, n_mels=self.n_mfcc
-        )
-        melspec = melspectrogram(audio)
+        # Convert to MFCC
+        mfcc = T.MFCC(sample_rate=self.target_sample_rate, n_mfcc=self.n_mfcc)
+        mfcc = mfcc(audio)
 
         if self.delta:
             # Add delta
-            melspec = torchaudio.transforms.ComputeDeltas()(melspec)
+            mfcc = torchaudio.transforms.ComputeDeltas()(mfcc)
         elif self.delta_delta:
             # Add delta delta
-            melspec = torchaudio.transforms.ComputeDeltas()(melspec)
-            melspec = torchaudio.transforms.ComputeDeltas()(melspec)
+            mfcc = torchaudio.transforms.ComputeDeltas()(mfcc)
+            mfcc = torchaudio.transforms.ComputeDeltas()(mfcc)
 
-        return (torch.stack([melspec]), torch.tensor(self.labels[index]).float())
+        return (torch.stack([mfcc]), torch.tensor(self.labels[index]).float())
 
 
 class AudioModel(pl.LightningModule):
@@ -248,9 +247,9 @@ class AudioModel(pl.LightningModule):
         return logits
 
 
-def create_model(config: Config, audio_shape: tuple):
+def create_model(config: Config, audio_shape: list):
     if config.model_type == "yolo":
-        yolo_network = config.create_network()
+        yolo_network = config.create_network(shape=audio_shape)
         yolo_network.compile(  # type: ignore
             loss=keras.losses.BinaryCrossentropy(),
             optimizer=keras.optimizers.Adam(lr=1e-3),
@@ -287,6 +286,7 @@ def custom_collate(batch):
     target = torch.LongTensor(target)
     return [data, target]
 
+
 def create_ast_data_and_model(config: Config):
     audio_conf = {
         "num_mel_bins": 128,
@@ -301,6 +301,7 @@ def create_ast_data_and_model(config: Config):
     }
     audio_df = create_df_from_audio_filepaths(config)
     audio_data_set = AudiosetDataset(audio_df, audio_conf)
+    audio_data_set1 = AudioDataset(audio_df, audio_length=config.audio_length)
     train_set, val_set, test_set = create_train_test_val_split(audio_data_set)
     train_loader = torch.utils.data.DataLoader(
         train_set,
@@ -308,7 +309,6 @@ def create_ast_data_and_model(config: Config):
         shuffle=True,
         num_workers=4,
         pin_memory=True,
-        # collate_fn=custom_collate
     )
     val_loader = torch.utils.data.DataLoader(
         val_set,
@@ -316,7 +316,6 @@ def create_ast_data_and_model(config: Config):
         shuffle=False,
         num_workers=4,
         pin_memory=True,
-        collate_fn=custom_collate
     )
 
     test_loader = torch.utils.data.DataLoader(
@@ -325,7 +324,6 @@ def create_ast_data_and_model(config: Config):
         shuffle=False,
         num_workers=4,
         pin_memory=True,
-        collate_fn=custom_collate
     )
 
     audio_model = ASTModel(
@@ -335,6 +333,13 @@ def create_ast_data_and_model(config: Config):
         imagenet_pretrain=True,
         audioset_pretrain=True,
     )
+
+    # set only last layers to be trainable
+    for name, param in audio_model.named_parameters():
+        if "fc" in name:
+            param.requires_grad = True
+        else:
+            param.requires_grad = False
 
     return audio_model, train_loader, val_loader, test_loader
 
@@ -348,14 +353,15 @@ def train_ast_model(config: Config):
         max_epochs=config.epochs,
         # logger=wandb_logger,
         log_every_n_steps=1,
-        accelerator="gpu"
+        accelerator="gpu",
     )
     trainer.fit(audio_model, train_loader, val_loader)
     trainer.test(audio_model, test_loader)
 
+
 def train_keras_network(config: Config):
     audio_df = create_df_from_audio_filepaths(config)
-    audio_df = AudioDataset(audio_df, config.audio_length, spectogram=True)
+    audio_df = AudioDataset(audio_df, config.audio_length, spectrogram=True)
     # split dataset
     train_set, val_set, test_set = create_train_test_val_split(audio_df)
     # create dataloaders
@@ -363,8 +369,9 @@ def train_keras_network(config: Config):
     val_loader = DataLoader(val_set, batch_size=2, shuffle=False)
 
     # get shape of audio data, for input shape of model
-    audio, _ = train_set[0]
-    audio_shape = audio.shape
+    audio, label = train_set[0]
+    audio_shape = list(audio.shape)
+    audio_shape.reverse()
 
     # create wandb logger
     run = wandb.init(project="test_rat_USV", reinit=True)
@@ -395,7 +402,7 @@ def train_torch_network(config: Config):
     audio_shape = audio.shape
 
     # create wandb logger
-    # wandb_logger = WandbLogger(project="test_rat_USV", log_model="all")
+    # wandb_logger = WandbLogger(project="test_rat_USV", log_model=True)
 
     # create model and trainer
     if config.model_type == "resnet":
@@ -419,7 +426,7 @@ def train_torch_network(config: Config):
         max_epochs=config.epochs,
         # logger=wandb_logger,
         log_every_n_steps=1,
-        accelerator="gpu"
+        accelerator="gpu",
     )
     # train the model
     trainer.fit(

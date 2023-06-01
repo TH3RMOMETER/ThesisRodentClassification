@@ -132,4 +132,4 @@ def process_audio_folder(config: Config):
 
 
 if __name__ == "__main__":
-    process_audio_folder(config=Config())
+    process_audio_folder(config=Config()) # type: ignore

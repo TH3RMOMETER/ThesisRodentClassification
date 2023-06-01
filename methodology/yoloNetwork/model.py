@@ -6,10 +6,10 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 
-def create_model():
-    input_1_unnormalized = keras.Input(shape=(37648,52,1), name="input_1_unnormalized")
-    input_1 = SubtractConstantLayer((37648,52,1), name="input_1_")(input_1_unnormalized)
-    Conv1 = layers.Conv2D(32, (3,3), strides=(2,2), padding="same", name="Conv1_")(input_1_unnormalized)
+def create_model(shape=[37648,52,1]):
+    input_1_unnormalized = keras.Input(shape=shape, name="input_1_unnormalized")
+    input_1 = SubtractConstantLayer(shape, name="input_1_")(input_1_unnormalized)
+    Conv1 = layers.Conv2D(32, (3,3), strides=(2,2), padding="same", name="Conv1_")(input_1)
     bn_Conv1 = layers.BatchNormalization(epsilon=0.001000, name="bn_Conv1_")(Conv1)
     Conv1_relu = layers.ReLU(max_value=6.000000)(bn_Conv1)
     expanded_conv_depthwise = layers.DepthwiseConv2D(kernel_size=(3,3), padding="same", use_bias=True, name="expanded_conv_depthwise_")(Conv1_relu)

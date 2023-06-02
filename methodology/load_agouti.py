@@ -1,10 +1,12 @@
-from datetime import datetime
 import random
+from datetime import datetime
+
 import audioread
 import numpy as np
 import pandas as pd
 import pytz
-from process_audio import get_audio_file_length, get_sample_rate, convert_seconds_to_frames_in_audiofile
+
+from methodology.process_audio import get_audio_file_length, get_sample_rate, convert_seconds_to_frames_in_audiofile
 
 
 def load_agouti_data(media_filepath: str, observations_filepath: str) -> pd.DataFrame:
@@ -19,10 +21,15 @@ def load_agouti_data(media_filepath: str, observations_filepath: str) -> pd.Data
     agouti_media = agouti_media.drop_duplicates(subset=['sequenceID'])
 
     agouti = pd.merge(agouti_observations, agouti_media, on=[
-                      'sequenceID', 'deploymentID', 'timestamp'], suffixes=('_obs', '_media')) \
+        'sequenceID', 'deploymentID', 'timestamp'], suffixes=('_obs', '_media')) \
         .dropna(axis=1, how='all')
 
     # convert timestamp to datetime object
+    # if flevopark is in the filepath, the timestamp is in UTC + 1
+    if 'flevopark' in media_filepath:
+        agouti.timestamp = pd.to_datetime(agouti.timestamp, utc=True).map(lambda x: x.tz_convert('Etc/GMT-1'))
+    else:
+        agouti.timestamp = pd.to_datetime(agouti.timestamp, utc=True).map(lambda x: x.tz_convert('Europe/Amsterdam'))
     agouti.timestamp = pd.to_datetime(agouti.timestamp)
 
     return agouti
@@ -42,7 +49,8 @@ def get_start_time_audio_file(audio_file_name: str) -> datetime:
 
 
 def filter_agouti_on_audio_file(agouti: pd.DataFrame, audio_file_path: str) -> pd.DataFrame:
-    """Return filtered agouti data for containing first two parts of audio file name and timestamps being between audio file start and end.
+    """Return filtered agouti data for containing first two parts of audio file name and timestamps
+    being between audio file start and end.
 
     Args:
         agouti (pd.DataFrame): main agouti dataframe
@@ -128,7 +136,8 @@ def create_list_with_random_start_and_end_times(audio_ranges: list, difference: 
         # add difference to random point
         random_range = (random_point - difference, random_point + difference)
         # check if random range is within one of the ranges in audio_ranges or within audio_points_with_difference
-        while any(random_range[0] <= r[1] and random_range[1] >= r[0] for r in audio_ranges + audio_points_with_difference):
+        while any(random_range[0] <= r[1] and random_range[1] >= r[0] for r in
+                  audio_ranges + audio_points_with_difference):
             # create new random point
             random_point = np.random.uniform(0, totalsec)
             # add difference to random point
@@ -138,3 +147,7 @@ def create_list_with_random_start_and_end_times(audio_ranges: list, difference: 
         audio_points_with_difference.append(random_range)
 
     return audio_points_with_difference
+
+
+
+

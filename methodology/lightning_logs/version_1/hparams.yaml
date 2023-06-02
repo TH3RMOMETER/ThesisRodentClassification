@@ -1,0 +1,25 @@
+config: !!python/object:config.Config
+  agouti_media_path: C:\Users\gijst\Documents\Master Data Science\Thesis\flevopark-20230202124032\media.csv
+  agouti_observations_path: C:\Users\gijst\Documents\Master Data Science\Thesis\flevopark-20230202124032\observations.csv
+  audio_data_folder_path: C:\Users\gijst\Documents\Master Data Science\Thesis\audio_data
+  audio_length: 23998
+  batch_size: 1
+  delta: true
+  delta_delta: true
+  epochs: 10
+  learning_rate: 0.001
+  max_epochs: 100
+  max_lr: 0.01
+  model_type: resnet
+  num_classes: 1
+  num_cpus: 12
+  output_path: C:\Users\gijst\Documents\Master Data Science\Thesis\processed_data
+  slice_len: 25
+  step_size: 0.9
+  target_sample_rate: 32000
+input_shape: !!python/object/apply:torch.Size
+- !!python/tuple
+  - 1
+  - 40
+  - 3839681
+num_classes: 1

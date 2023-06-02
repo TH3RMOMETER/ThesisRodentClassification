@@ -55,7 +55,7 @@ class DataGenerator(k.utils.Sequence):
             )  # generation of data handled by pytorch dataloader
         # catch when no items left in iterator
         except StopIteration:
-            self.iter = iter(self.gen)  # reinstanciate iteator of data
+            self.iter = iter(self.gen)  # reinstanciate iterator of data
             ims, lbs = next(
                 self.iter
             )  # generation of data handled by pytorch dataloader

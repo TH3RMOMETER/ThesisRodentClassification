@@ -7,7 +7,7 @@ import os
 import keras
 
 
-def load_model(load_weights=True, debug=False, shape=[37648,52,1]) -> keras.engine.functional.Functional:
+def load_model(load_weights=True, debug=True, shape=[37648,52,1]) -> keras.engine.functional.Functional:
     m = model.create_model(shape=shape)
     if load_weights:
         loadWeights(m, debug=debug)

@@ -1,8 +1,8 @@
-from doctest import master
-from email.mime import audio
 import os
 
 import sys
+
+import numpy as np
 
 sys.path.append(r"C:\Users\gijst\Documents\Master Data Science\Thesis")
 
@@ -334,13 +334,6 @@ def create_ast_data_and_model(config: Config):
         audioset_pretrain=True,
     )
 
-    # set only last layers to be trainable
-    for name, param in audio_model.named_parameters():
-        if "fc" in name:
-            param.requires_grad = True
-        else:
-            param.requires_grad = False
-
     return audio_model, train_loader, val_loader, test_loader
 
 
@@ -365,8 +358,8 @@ def train_keras_network(config: Config):
     # split dataset
     train_set, val_set, test_set = create_train_test_val_split(audio_df)
     # create dataloaders
-    train_loader = DataLoader(train_set, batch_size=2, shuffle=True)
-    val_loader = DataLoader(val_set, batch_size=2, shuffle=False)
+    train_loader = DataLoader(train_set, batch_size=1, shuffle=True)
+    val_loader = DataLoader(val_set, batch_size=1, shuffle=False)
 
     # get shape of audio data, for input shape of model
     audio, label = train_set[0]
@@ -374,14 +367,14 @@ def train_keras_network(config: Config):
     audio_shape.reverse()
 
     # create wandb logger
-    run = wandb.init(project="test_rat_USV", reinit=True)
+    # run = wandb.init(project="test_rat_USV", reinit=True)
 
     model = create_model(config, audio_shape)
     # convert torch loader to keras compatible object
     train_loader = DataGenerator(train_loader, 2)
     val_loader = DataGenerator(val_loader, 2)
-    model.fit_generator(train_loader, epochs=10, validation_data=val_loader, callbacks=[WandbCallback()])  # type: ignore
-    run.finish()  # type: ignore
+    model.fit_generator(train_loader, epochs=10, validation_data=val_loader)  # type: ignore
+    # run.finish()  # type: ignore
 
 
 def train_torch_network(config: Config):
@@ -415,12 +408,12 @@ def train_torch_network(config: Config):
     image_loader = DataLoader(train_set, batch_size=1, shuffle=True)
 
     # copy a few samples for image prediction logger
-    imgs = []
-    labels = []
-    for image, label in image_loader:
-        imgs.append(image)
-        labels.append(label)
-    samples = (torch.cat(imgs), torch.cat(labels))
+    # imgs = []
+    # labels = []
+    # for image, label in image_loader:
+    #     imgs.append(image)
+    #     labels.append(label)
+    # samples = (torch.cat(imgs), torch.cat(labels))
 
     trainer = pl.Trainer(
         max_epochs=config.epochs,

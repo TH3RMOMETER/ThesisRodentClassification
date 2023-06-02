@@ -1,0 +1,9 @@
+audioset_pretrain: false
+fstride: 10
+imagenet_pretrain: false
+input_fdim: 128
+input_tdim: 23998
+label_dim: 1
+model_size: base384
+tstride: 10
+verbose: true

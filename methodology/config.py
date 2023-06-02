@@ -1,16 +1,17 @@
-from dataclasses import dataclass
 import multiprocessing
-import torch
+from dataclasses import dataclass
+
 from torchvision.models import resnet50, ResNet50_Weights
-import yoloNetwork
+
 import LongyoloNetwork
+import yoloNetwork
 from ast_models import ASTModel
 
 
 @dataclass
 class Config(object):
     """Configuration class"""
-    model_type: str = "ast_model"
+    model_type: str = "resnet"
     delta: bool = True
     delta_delta: bool = True
     num_classes: int = 1
@@ -25,9 +26,11 @@ class Config(object):
     )
     agouti_media_path: str = r"C:\Users\gijst\Documents\Master Data Science\Thesis\flevopark-20230202124032\media.csv"
     agouti_observations_path: str = r"C:\Users\gijst\Documents\Master Data Science\Thesis\flevopark-20230202124032\observations.csv"
+    agouti_filepath = r"C:\Users\gijst\Documents\Master Data Science\Thesis\agouti_data\agouti.pkl"
+    audio_folder = r"C:\Users\gijst\Documents\Master Data Science\Thesis\audio_data\data\20230417"
     slice_len: int = 25
     step_size: float = 0.9
-    cropped_audio_path = r"C:\Users\gijst\Documents\Master Data Science\Thesis\audio_data\cropped_audio_data"
+    cropped_audio_path = r"C:\Users\gijst\Documents\Master Data Science\Thesis\processed_data"
     output_path: str = (
         r"C:\Users\gijst\Documents\Master Data Science\Thesis\processed_data"
     )
@@ -36,9 +39,10 @@ class Config(object):
     audio_length: int = 23998
     target_sample_rate: int = 32000
 
-
-    def create_network(self, shape=[37648,52,1]):
+    def create_network(self, shape=None):
         """Create network"""
+        if shape is None:
+            shape = [37648, 52, 1]
         if self.model_type == "yolo":
             return yoloNetwork.load_model(shape=shape, load_weights=True)
         elif self.model_type == "long_yolo":

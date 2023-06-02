@@ -1,14 +1,11 @@
-import os
 from typing import List
 
+from config import Config
 from load_agouti import (
     convert_filtered_data_into_list_with_start_and_end_times,
     create_list_with_random_start_and_end_times,
-    create_list_with_start_and_end_times,
-    load_and_filter_agouti_data,
-)
-from config import Config
-from process_audio import process_audio_MFCC, save_audio_file_start_end
+    create_list_with_start_and_end_times, load_and_filter_agouti_data)
+from process_audio import process_audio_MFCC, save_audio_file_start_end, create_list_with_audio_filepaths_in_folder
 
 
 def create_audio_points(config: Config, audio_file_path: str):
@@ -16,6 +13,7 @@ def create_audio_points(config: Config, audio_file_path: str):
 
     Args:
         config (Config): Config object with all variables
+        audio_file_path (str): file path
 
     Returns:
         (List, List): List with audio points from agouti data, list with random audio points
@@ -69,32 +67,16 @@ def create_mfcc_data(config: Config, audio_points: List, random_audio_points: Li
         )
 
 
-def create_list_with_audio_filepaths_in_folder(folder_path: str):
-    """Create list with audio filepaths in folder
-
-    Args:
-        folder_path (str): path to folder with audio files
-
-    Returns:
-        List: list with audio filepaths
-    """
-    audio_filepaths = []
-    # only include .flac files
-    for file in os.listdir(folder_path):
-        if file.endswith(".flac"):
-            audio_filepaths.append(os.path.join(folder_path, file))
-    return audio_filepaths
-
-
 def save_audio_points_to_file(
-    config: Config, audio_points: List, random_audio_points: List, file_path: str
+        config: Config, audio_points: List, random_audio_points: List, file_path: str
 ):
-    """Create MFCC data from audio points
+    """Create audio data from audio points
 
     Args:
         config (Config): Config object with all variables
         audio_points (List): list with audio points from agouti data
         random_audio_points (List): list with random audio points
+        file_path (str): filepath
     """
     for index, point in enumerate(audio_points):
         save_audio_file_start_end(
@@ -132,4 +114,4 @@ def process_audio_folder(config: Config):
 
 
 if __name__ == "__main__":
-    process_audio_folder(config=Config()) # type: ignore
+    pass

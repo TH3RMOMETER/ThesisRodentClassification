@@ -12,3 +12,4 @@
 /wandb
 /lightning_logs
 *.ckpt
+*.pyc

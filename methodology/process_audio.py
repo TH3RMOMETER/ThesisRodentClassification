@@ -493,7 +493,7 @@ def create_audio_from_agouti_annotations(config: Config, agouti: pd.DataFrame, a
             # ensure that the random audio files are not in the used audio files
             while random_selected_audio_files.empty or bool(
                     set(random_selected_audio_files['audio_files'].tolist()).intersection(
-                            used_audio_files)):
+                        used_audio_files)):
                 random_timestamp = select_random_audio_point(timestamp)
                 random_selected_audio_files = select_audio_files(config, random_timestamp, site_id, audio_files)
             # add audio files values to used audio files set
@@ -518,8 +518,10 @@ def test():
     # create dummy pandas file with three timestamps and fileNames
 
     agouti = pd.DataFrame(columns=['timestamp', 'fileName'])
-    agouti['timestamp'] = pd.to_datetime(['2022-05-28 07:08:09+01:00', '2022-05-28 11:08:09+01:00', '2022-05-28 18:08:09+01:00'])
-    agouti['fileName'] = ['20221209153156-artis_18_wildlifecamera1_2022-11-16_15-41-56_(136).JPG', '20221209153156-artis_18_wildlifecamera1_2022-11-16_15-41-56_(136).JPG',
+    agouti['timestamp'] = pd.to_datetime(
+        ['2022-05-28 07:08:09+01:00', '2022-05-28 11:08:09+01:00', '2022-05-28 18:08:09+01:00'])
+    agouti['fileName'] = ['20221209153156-artis_18_wildlifecamera1_2022-11-16_15-41-56_(136).JPG',
+                          '20221209153156-artis_18_wildlifecamera1_2022-11-16_15-41-56_(136).JPG',
                           '20221209153156-artis_18_wildlifecamera1_2022-11-16_15-41-56_(136).JPG']
     create_audio_from_agouti_annotations(config, agouti, audio_files)
     x = 1
@@ -531,6 +533,7 @@ def run():
     audio_files = create_list_with_audio_filepaths_in_folder(config.audio_folder)
     audio_files = create_pandas_dataframe_from_audio_files(audio_files)
     create_audio_from_agouti_annotations(config, agouti, audio_files)
+
 
 if __name__ == '__main__':
     test()

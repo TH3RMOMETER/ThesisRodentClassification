@@ -11,7 +11,7 @@ from ast_models import ASTModel
 @dataclass
 class Config(object):
     """Configuration class"""
-    model_type: str = "resnet"
+    model_type: str = "long_yolo"
     delta: bool = True
     delta_delta: bool = True
     num_classes: int = 1
@@ -20,7 +20,7 @@ class Config(object):
     learning_rate: float = 0.001
     max_epochs: int = 100
     max_lr: float = 0.01
-    audio_length: int = 120
+    audio_length: int = 240
     audio_data_folder_path: str = (
         r"C:\Users\gijst\Documents\Master Data Science\Thesis\audio_data"
     )
@@ -37,7 +37,7 @@ class Config(object):
     # get number of cpus
     num_cpus: int = multiprocessing.cpu_count()
     audio_length: int = 23998
-    target_sample_rate: int = 32000
+    target_sample_rate: int = 8000
 
     def create_network(self, shape=None):
         """Create network"""
@@ -46,7 +46,7 @@ class Config(object):
         if self.model_type == "yolo":
             return yoloNetwork.load_model(shape=shape, load_weights=True)
         elif self.model_type == "long_yolo":
-            return LongyoloNetwork.load_model(load_weights=True)
+            return LongyoloNetwork.load_model(shape=shape, load_weights=True)
         elif self.model_type == "resnet":
             return resnet50(weights=ResNet50_Weights.DEFAULT)
         elif self.model_type == "ast_model":

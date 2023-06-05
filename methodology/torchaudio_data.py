@@ -140,7 +140,7 @@ class AudioDataset(Dataset):
             mfcc = torchaudio.transforms.ComputeDeltas()(mfcc)
             mfcc = torchaudio.transforms.ComputeDeltas()(mfcc)
 
-        return (torch.stack([mfcc]), torch.tensor(self.labels[index]).float())
+        return torch.stack([mfcc]), torch.tensor(self.labels[index]).float()
 
 
 class AudioModel(pl.LightningModule):
@@ -248,14 +248,14 @@ class AudioModel(pl.LightningModule):
 
 
 def create_model(config: Config, audio_shape: list):
-    if config.model_type == "yolo":
+    if config.model_type == "yolo" or "long_yolo":
         yolo_network = config.create_network(shape=audio_shape)
         yolo_network.compile(  # type: ignore
             loss=keras.losses.BinaryCrossentropy(),
             optimizer=keras.optimizers.Adam(lr=1e-3),
             metrics=[
                 keras.metrics.BinaryAccuracy(),
-                keras.metrics.AUC(),
+                #keras.metrics.AUC(),
                 f1_m,
                 precision_m,
                 recall_m,
@@ -365,6 +365,8 @@ def train_keras_network(config: Config):
     audio, label = train_set[0]
     audio_shape = list(audio.shape)
     audio_shape.reverse()
+    # swap first two dimensions
+    audio_shape[0], audio_shape[1] = audio_shape[1], audio_shape[0]
 
     # create wandb logger
     # run = wandb.init(project="test_rat_USV", reinit=True)

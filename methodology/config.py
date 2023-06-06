@@ -11,9 +11,10 @@ from ast_models import ASTModel
 @dataclass
 class Config(object):
     """Configuration class"""
-    model_type: str = "long_yolo"
+    model_type: str = "ast_model"
+    spectrogram: bool = True
     delta: bool = True
-    delta_delta: bool = True
+    delta_delta: bool = False
     num_classes: int = 1
     batch_size: int = 1
     epochs: int = 10
@@ -30,14 +31,13 @@ class Config(object):
     audio_folder = r"C:\Users\gijst\Documents\Master Data Science\Thesis\audio_data\data\20230417"
     slice_len: int = 25
     step_size: float = 0.9
-    cropped_audio_path = r"C:\Users\gijst\Documents\Master Data Science\Thesis\processed_data"
+    cropped_audio_path = r"G:\thesis\ThesisRodentClassification\processed_data"
     output_path: str = (
         r"C:\Users\gijst\Documents\Master Data Science\Thesis\processed_data"
     )
     # get number of cpus
     num_cpus: int = multiprocessing.cpu_count()
-    audio_length: int = 23998
-    target_sample_rate: int = 8000
+    target_sample_rate: int = 32000
 
     def create_network(self, shape=None):
         """Create network"""

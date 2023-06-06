@@ -164,6 +164,8 @@ class AudiosetDataset(Dataset):
         )
 
         target_length = self.audio_conf.get("target_length")
+        # convert target_length seconds to frames
+        target_length = int(target_length * self.target_sample_rate / 1000)
         n_frames = fbank.shape[0]
 
         p = target_length - n_frames

@@ -3,8 +3,11 @@ import os
 import sys
 
 import numpy as np
+import librosa
+import torchmetrics
+from matplotlib import pyplot as plt
 
-sys.path.append(r"C:\Users\gijst\Documents\Master Data Science\Thesis")
+sys.path.append(r"G:\thesis\ThesisRodentClassification")
 
 import lightning.pytorch as pl
 import pandas as pd
@@ -31,6 +34,15 @@ from torchmetrics.functional import accuracy
 from wandb.keras import WandbCallback
 
 import wandb
+
+from tensorflow.compat.v1 import ConfigProto
+from tensorflow.compat.v1 import InteractiveSession
+
+
+def fix_gpu():
+    config = ConfigProto()
+    config.gpu_options.allow_growth = True
+    session = InteractiveSession(config=config)
 
 
 def create_df_from_audio_filepaths(config: Config):
@@ -59,17 +71,17 @@ def create_df_from_audio_filepaths(config: Config):
 
 class AudioDataset(Dataset):
     def __init__(
-        self,
-        df,
-        audio_length,
-        target_sample_rate=32000,
-        n_mfcc=40,
-        wave_transforms=None,
-        spec_transforms=None,
-        delta=False,
-        delta_delta=False,
-        spectrogram=False,
-        long=False,
+            self,
+            df,
+            audio_length,
+            target_sample_rate=32000,
+            n_mfcc=40,
+            wave_transforms=None,
+            spec_transforms=None,
+            delta=False,
+            delta_delta=False,
+            spectrogram=False,
+            long=False,
     ):
         self.df = df
         self.file_paths = df["file_path"].values
@@ -129,7 +141,7 @@ class AudioDataset(Dataset):
             return (torch.stack([spec]), torch.tensor(self.labels[index]).float())
 
         # Convert to MFCC
-        mfcc = T.MFCC(sample_rate=self.target_sample_rate, n_mfcc=self.n_mfcc)
+        mfcc = T.MFCC(sample_rate=self.target_sample_rate, n_mfcc=self.n_mfcc, melkwargs={'n_mels': 64})
         mfcc = mfcc(audio)
 
         if self.delta:
@@ -145,10 +157,10 @@ class AudioDataset(Dataset):
 
 class AudioModel(pl.LightningModule):
     def __init__(
-        self,
-        num_classes=1,
-        input_shape=(1, 40, 7501),
-        config: Config = Config(),
+            self,
+            num_classes=1,
+            input_shape=(1, 40, 7501),
+            config: Config = Config(),
     ):
         super().__init__()
         self.model = config.create_network()
@@ -166,14 +178,20 @@ class AudioModel(pl.LightningModule):
         )
         self.model = nn.Sequential(first_conv_layer, self.model)  # type: ignore
 
-        # metrics
-        self.train_acc = Accuracy(task="binary")
-        self.val_acc = Accuracy(task="binary")
-        self.test_acc = Accuracy(task="binary")
-        self.val_f1 = BinaryF1Score()
-        self.test_f1 = BinaryF1Score()
-        self.val_auc_roc = BinaryAUROC()
-        self.test_auc_roc = BinaryAUROC()
+        self.metric_collection = torchmetrics.MetricCollection({
+            "accuracy": torchmetrics.Accuracy(task="binary"),
+            "f1": BinaryF1Score(),
+            # "auc_roc": BinaryAUROC(),
+            "precision": torchmetrics.Precision(task="binary"),
+            "recall": torchmetrics.Recall(task="binary"),
+        })
+        self.metric_collection_val = torchmetrics.MetricCollection({
+            "val_accuracy": torchmetrics.Accuracy(task="binary"),
+            "val_f1": BinaryF1Score(),
+            # "auc_roc": BinaryAUROC(),
+            "val_precision": torchmetrics.Precision(task="binary"),
+            "val_recall": torchmetrics.Recall(task="binary"),
+        })
 
         self.save_hyperparameters()
 
@@ -190,61 +208,30 @@ class AudioModel(pl.LightningModule):
 
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=0.001)
-        scheduler = lr_scheduler.ReduceLROnPlateau(optimizer)
-        return {
-            "optimizer": optimizer,
-            "lr_scheduler": scheduler,  # Changed scheduler to lr_scheduler
-            "monitor": "val_loss",
-        }
+        reduce_lr_on_plateau = lr_scheduler.ReduceLROnPlateau(optimizer, patience=3, factor=0.5, verbose=True)
+        return {'optimizer': optimizer, 'lr_scheduler': reduce_lr_on_plateau, 'monitor': 'val_loss'}
 
     def training_step(self, batch, batch_idx):
         x, y = batch
         logits, loss = self.loss(x, y.unsqueeze(1))
-        self.train_acc(logits, y.unsqueeze(1))
-        self.log("train_loss", loss, on_epoch=True)
-        self.log("train_acc", self.train_acc, on_epoch=True)
+        self.metric_collection.update(logits, y.unsqueeze(1))
+        self.log("train_loss", loss, on_step=True, on_epoch=False)
+        self.log_dict(self.metric_collection, on_step=True, on_epoch=False)
         return loss
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
         logits, loss = self.loss(x, y.unsqueeze(1))
-        self.val_acc(logits, y.unsqueeze(1))
-        precision = precision_recall.BinaryPrecision()(logits, y.unsqueeze(1))
-        recall = precision_recall.BinaryRecall()(logits, y.unsqueeze(1))
-        f1_score = BinaryF1Score()(logits, batch[1].unsqueeze(1))
-        auc_roc = BinaryAUROC()(logits, batch[1].unsqueeze(1))
-        self.log("val_auc_roc", auc_roc, on_step=False, on_epoch=True)
-        self.log("val_precision", precision, on_step=False, on_epoch=True)
-        self.log("val_recall", recall, on_step=False, on_epoch=True)
-        self.log("val_f1", f1_score, on_step=False, on_epoch=True)
-        self.log("val_loss", loss, on_step=False, on_epoch=True)
-        self.log("val_acc", self.val_acc, on_step=False, on_epoch=True)
-        return logits
-
-    def on_validation_epoch_end(self, validation_step_outputs):
-        flattened_logits = torch.flatten(torch.cat(validation_step_outputs))
-        self.logger.experiment.log(  # type: ignore
-            {
-                "valid/logits": wandb.Histogram(flattened_logits.to("cpu")),  # type: ignore
-                "global_step": self.global_step,
-            }
-        )
+        self.metric_collection_val.update(logits, y.unsqueeze(1))
+        self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log_dict(self.metric_collection_val, on_step=False, on_epoch=True, prog_bar=True)
 
     def test_step(self, batch, batch_idx):
         x, y = batch
         logits, loss = self.loss(x, y.unsqueeze(1))
-        self.test_acc(logits, y.unsqueeze(1))
-        precision = precision_recall.BinaryPrecision()(logits, y.unsqueeze(1))
-        recall = precision_recall.BinaryRecall()(logits, y.unsqueeze(1))
-        f1_score = BinaryF1Score()(logits, batch[1].unsqueeze(1))
-        auc_roc = BinaryAUROC()(logits, batch[1].unsqueeze(1))
-        self.log("test_auc_roc", auc_roc, on_step=False, on_epoch=True)
-        self.log("test_precision", precision, on_step=False, on_epoch=True)
-        self.log("test_recall", recall, on_step=False, on_epoch=True)
-        self.log("test_f1", f1_score, on_step=False, on_epoch=True)
-        self.log("test_loss", loss, on_step=False, on_epoch=True)
-        self.log("test_acc", self.val_acc, on_step=False, on_epoch=True)
-        return logits
+        self.metric_collection.update(logits, y.unsqueeze(1))
+        self.log("test_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log_dict(self.metric_collection, on_step=False, on_epoch=True, prog_bar=True)
 
 
 def create_model(config: Config, audio_shape: list):
@@ -252,10 +239,10 @@ def create_model(config: Config, audio_shape: list):
         yolo_network = config.create_network(shape=audio_shape)
         yolo_network.compile(  # type: ignore
             loss=keras.losses.BinaryCrossentropy(),
-            optimizer=keras.optimizers.Adam(lr=1e-3),
+            optimizer=keras.optimizers.Adam(learning_rate=1e-3),
             metrics=[
                 keras.metrics.BinaryAccuracy(),
-                #keras.metrics.AUC(),
+                keras.metrics.AUC(),
                 f1_m,
                 precision_m,
                 recall_m,
@@ -272,7 +259,7 @@ def create_model(config: Config, audio_shape: list):
 
 def create_train_test_val_split(audio_df: AudioDataset) -> tuple:
     train_size = int(0.8 * len(audio_df))
-    val_size = int(0.1 * len(audio_df))
+    val_size = round(0.1 * len(audio_df))
     test_size = len(audio_df) - train_size - val_size
     train_set, val_set, test_set = torch.utils.data.random_split(  # type: ignore
         audio_df, [train_size, val_size, test_size]
@@ -280,16 +267,9 @@ def create_train_test_val_split(audio_df: AudioDataset) -> tuple:
     return train_set, val_set, test_set
 
 
-def custom_collate(batch):
-    data = [item[0] for item in batch]
-    target = [item[1] for item in batch]
-    target = torch.LongTensor(target)
-    return [data, target]
-
-
 def create_ast_data_and_model(config: Config):
     audio_conf = {
-        "num_mel_bins": 128,
+        "num_mel_bins": 64,
         "target_length": config.audio_length,
         "freqm": 0,
         "timem": 0,
@@ -300,8 +280,7 @@ def create_ast_data_and_model(config: Config):
         "noise": False,
     }
     audio_df = create_df_from_audio_filepaths(config)
-    audio_data_set = AudiosetDataset(audio_df, audio_conf)
-    audio_data_set1 = AudioDataset(audio_df, audio_length=config.audio_length)
+    audio_data_set = AudiosetDataset(audio_df, audio_conf, target_sample_rate=config.target_sample_rate)
     train_set, val_set, test_set = create_train_test_val_split(audio_data_set)
     train_loader = torch.utils.data.DataLoader(
         train_set,
@@ -325,6 +304,9 @@ def create_ast_data_and_model(config: Config):
         num_workers=4,
         pin_memory=True,
     )
+
+    # convert audio_length from seconds to frames using sample rate
+    audio_length = config.audio_length * config.target_sample_rate
 
     audio_model = ASTModel(
         label_dim=1,
@@ -354,7 +336,7 @@ def train_ast_model(config: Config):
 
 def train_keras_network(config: Config):
     audio_df = create_df_from_audio_filepaths(config)
-    audio_df = AudioDataset(audio_df, config.audio_length, spectrogram=True)
+    audio_df = AudioDataset(audio_df, config.audio_length, spectrogram=config.spectrogram)
     # split dataset
     train_set, val_set, test_set = create_train_test_val_split(audio_df)
     # create dataloaders
@@ -369,18 +351,19 @@ def train_keras_network(config: Config):
     audio_shape[0], audio_shape[1] = audio_shape[1], audio_shape[0]
 
     # create wandb logger
-    # run = wandb.init(project="test_rat_USV", reinit=True)
+    run = wandb.init(project="test_rat_USV", reinit=True, name=f'{config.model_type}_spec_{config.spectrogram}_D_{config.delta}_DD_{config.delta_delta}')
 
     model = create_model(config, audio_shape)
     # convert torch loader to keras compatible object
     train_loader = DataGenerator(train_loader, 2)
     val_loader = DataGenerator(val_loader, 2)
-    model.fit_generator(train_loader, epochs=10, validation_data=val_loader)  # type: ignore
-    # run.finish()  # type: ignore
+    model.fit(train_loader, epochs=10, validation_data=val_loader)  # type: ignore
+    run.finish()  # type: ignore
 
 
 def train_torch_network(config: Config):
     num_cpus = config.num_cpus
+    torch.set_float32_matmul_precision('high')
     # create dataset
     audio_df = create_df_from_audio_filepaths(config)
     audio_df = AudioDataset(
@@ -397,7 +380,8 @@ def train_torch_network(config: Config):
     audio_shape = audio.shape
 
     # create wandb logger
-    # wandb_logger = WandbLogger(project="test_rat_USV", log_model=True)
+    wandb_logger = WandbLogger(project="test_rat_USV", log_model=True,
+                               name=f'{config.model_type}_spec_{config.spectrogram}_D_{config.delta}_DD_{config.delta_delta}')
 
     # create model and trainer
     if config.model_type == "resnet":
@@ -407,19 +391,10 @@ def train_torch_network(config: Config):
     train_loader = DataLoader(train_set, batch_size=1, shuffle=True)
     val_loader = DataLoader(val_set, batch_size=1, shuffle=False)
     test_loader = DataLoader(test_set, batch_size=1, shuffle=False)
-    image_loader = DataLoader(train_set, batch_size=1, shuffle=True)
-
-    # copy a few samples for image prediction logger
-    # imgs = []
-    # labels = []
-    # for image, label in image_loader:
-    #     imgs.append(image)
-    #     labels.append(label)
-    # samples = (torch.cat(imgs), torch.cat(labels))
 
     trainer = pl.Trainer(
         max_epochs=config.epochs,
-        # logger=wandb_logger,
+        logger=wandb_logger,
         log_every_n_steps=1,
         accelerator="gpu",
     )
@@ -430,8 +405,47 @@ def train_torch_network(config: Config):
     trainer.test(audio_model, test_loader)
 
 
+def experiments():
+    yolo_spec = Config(model_type="yolo", spectrogram=True)
+    yolo_mfcc = Config(model_type="yolo", spectrogram=False)
+    yolo_mfcc_delta = Config(model_type="yolo", spectrogram=False, delta=True)
+    yolo_mfcc_delta_delta = Config(
+        model_type="yolo", spectrogram=False, delta=False, delta_delta=True
+    )
+    long_yolo_spec = Config(model_type="long_yolo", spectrogram=True)
+    long_yolo_mfcc = Config(model_type="long_yolo", spectrogram=False)
+    long_yolo_mfcc_delta = Config(
+        model_type="long_yolo", spectrogram=False, delta=True
+    )
+    long_yolo_mfcc_delta_delta = Config(
+        model_type="long_yolo", spectrogram=False, delta=False, delta_delta=True
+    )
+    resnet_spec = Config(model_type="resnet", spectrogram=True)
+    resnet_mfcc = Config(model_type="resnet", spectrogram=False)
+    resnet_mfcc_delta = Config(model_type="resnet", spectrogram=False, delta=True)
+    resnet_mfcc_delta_delta = Config(
+        model_type="resnet", spectrogram=False, delta=False, delta_delta=True
+    )
+    experiment_list = [
+        yolo_spec,
+        yolo_mfcc,
+        yolo_mfcc_delta,
+        yolo_mfcc_delta_delta,
+        long_yolo_spec,
+        long_yolo_mfcc,
+        long_yolo_mfcc_delta,
+        long_yolo_mfcc_delta_delta,
+        resnet_spec,
+        resnet_mfcc,
+        resnet_mfcc_delta,
+        resnet_mfcc_delta_delta
+    ]
+    return experiment_list
+
+
 if __name__ == "__main__":
     config = Config()
+    fix_gpu()
     if config.model_type == "yolo" or config.model_type == "long_yolo":
         train_keras_network(config)
     elif config.model_type == "resnet":

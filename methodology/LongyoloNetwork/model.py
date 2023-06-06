@@ -148,8 +148,10 @@ def create_model(shape):
     yolov2Batch2 = layers.BatchNormalization(epsilon=0.000010, name="yolov2Batch2_")(yolov2Conv2)
     yolov2Relu2 = layers.ReLU()(yolov2Batch2)
     yolov2ClassConv = layers.Conv2D(48, (1, 1), name="yolov2ClassConv_")(yolov2Relu2)
-
-    model = keras.Model(inputs=[input_1_unnormalized], outputs=[yolov2ClassConv])
+    maxPool = layers.MaxPooling2D()(yolov2ClassConv)
+    flatten = layers.Flatten()(maxPool)
+    binaryClassDense = layers.Dense(1, activation="sigmoid", name="binaryClassDense_")(flatten)
+    model = keras.Model(inputs=[input_1_unnormalized], outputs=[binaryClassDense])
     return model
 
 

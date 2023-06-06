@@ -17,7 +17,7 @@ def load_model(load_weights=True, debug=False, shape=[37648,52,1]):
 import tensorflow as tf
 import h5py
 
-def loadWeights(model, filename=os.path.join(__package__, "weights.h5"), debug=False):
+def loadWeights(model, filename=os.path.join(__package__, "weights.h5"), debug=True):
     with h5py.File(filename, 'r') as f:
         # Every layer is an h5 group. Ignore non-groups (such as /0)
         for g in f:

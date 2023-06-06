@@ -23,8 +23,8 @@ import h5py
 
 def loadWeights(
     model,
-    filename=r"C:\Users\gijst\Documents\Master Data Science\Thesis\methodology\yoloNetwork\weights.h5",
-    debug=False,
+    filename=os.path.join(__package__, "weights.h5"),
+    debug=True,
 ):
     with h5py.File(filename, "r") as f:
         # Every layer is an h5 group. Ignore non-groups (such as /0)

@@ -11,17 +11,18 @@ from ast_models import ASTModel
 @dataclass
 class Config(object):
     """Configuration class"""
-    model_type: str = "ast_model"
-    spectrogram: bool = True
+    model_type: str = "yolo"
+    spectrogram: bool = False
     delta: bool = True
     delta_delta: bool = False
     num_classes: int = 1
-    batch_size: int = 1
-    epochs: int = 10
+    batch_size: int = 3
+    epochs: int = 3
     learning_rate: float = 0.001
-    max_epochs: int = 100
+    max_epochs: int = 3
     max_lr: float = 0.01
     audio_length: int = 240
+    n_mfcc: int = 40
     audio_data_folder_path: str = (
         r"C:\Users\gijst\Documents\Master Data Science\Thesis\audio_data"
     )
@@ -31,13 +32,14 @@ class Config(object):
     audio_folder = r"C:\Users\gijst\Documents\Master Data Science\Thesis\audio_data\data\20230417"
     slice_len: int = 25
     step_size: float = 0.9
-    cropped_audio_path = r"G:\thesis\ThesisRodentClassification\processed_data"
+    cropped_audio_path = r"C:\Users\gijst\Documents\Master Data Science\Thesis\processed_data"
     output_path: str = (
         r"C:\Users\gijst\Documents\Master Data Science\Thesis\processed_data"
     )
     # get number of cpus
     num_cpus: int = multiprocessing.cpu_count()
-    target_sample_rate: int = 32000
+    target_sample_rate: int = 16000
+    random_state: int = 42
 
     def create_network(self, shape=None):
         """Create network"""

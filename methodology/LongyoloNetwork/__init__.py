@@ -5,26 +5,34 @@
 import LongyoloNetwork.model
 import os
 
-def load_model(load_weights=True, debug=False, shape=[37648,52,1]):
+
+def load_model(load_weights=True, debug=False, shape=[37648, 52, 1]):
     m = model.create_model(shape=shape)
     if load_weights:
         loadWeights(m, debug=debug)
     m.compile()
     return m
 
+
 ## Utility functions:
 
 import tensorflow as tf
 import h5py
+import pathlib
 
-def loadWeights(model, filename=os.path.join(__package__, "weights.h5"), debug=True):
-    with h5py.File(filename, 'r') as f:
+
+def loadWeights(
+    model,
+    filename=os.path.join(pathlib.Path(__file__).parent.resolve(), "weights.h5"),
+    debug=False,
+):
+    with h5py.File(filename, "r") as f:
         # Every layer is an h5 group. Ignore non-groups (such as /0)
         for g in f:
             if isinstance(f[g], h5py.Group):
                 group = f[g]
-                layerName = group.attrs['Name']
-                numVars = int(group.attrs['NumVars'])
+                layerName = group.attrs["Name"]
+                numVars = int(group.attrs["NumVars"])
                 if debug:
                     print("layerName:", layerName)
                     print("    numVars:", numVars)
@@ -33,14 +41,14 @@ def loadWeights(model, filename=os.path.join(__package__, "weights.h5"), debug=T
                 layer = model.layers[layerIdx]
                 if debug:
                     print("    layerIdx=", layerIdx)
-                # Every weight is an h5 dataset in the layer group. Read the weights 
+                # Every weight is an h5 dataset in the layer group. Read the weights
                 # into a list in the correct order
-                weightList = [0]*numVars
+                weightList = [0] * numVars
                 for d in group:
                     dataset = group[d]
-                    varName = dataset.attrs['Name']
-                    shp     = intList(dataset.attrs['Shape'])
-                    weightNum = int(dataset.attrs['WeightNum'])
+                    varName = dataset.attrs["Name"]
+                    shp = intList(dataset.attrs["Shape"])
+                    weightNum = int(dataset.attrs["WeightNum"])
                     # Read the weight and put it into the right position in the list
                     if debug:
                         print("    varName:", varName)
@@ -61,18 +69,19 @@ def loadWeights(model, filename=os.path.join(__package__, "weights.h5"), debug=T
                     except ValueError:
                         continue
 
+
 def layerNum(model, layerName):
     # Returns the index to the layer
     layers = model.layers
     for i in range(len(layers)):
-        if layerName==layers[i].name:
+        if layerName == layers[i].name:
             return i
     print("")
     print("WEIGHT LOADING FAILED. MODEL DOES NOT CONTAIN LAYER WITH NAME: ", layerName)
     print("")
     return -1
 
-def intList(myList): 
+
+def intList(myList):
     # Converts a list of numbers into a list of ints.
     return list(map(int, myList))
-

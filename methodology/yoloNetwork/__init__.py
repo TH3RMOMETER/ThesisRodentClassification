@@ -7,7 +7,7 @@ import os
 import keras
 
 
-def load_model(load_weights=True, debug=True, shape=[37648,52,1]) -> keras.engine.functional.Functional:
+def load_model(load_weights=True, debug=False, shape=[37648,52,1]) -> keras.engine.functional.Functional:
     m = model.create_model(shape=shape)
     if load_weights:
         loadWeights(m, debug=debug)
@@ -19,12 +19,13 @@ def load_model(load_weights=True, debug=True, shape=[37648,52,1]) -> keras.engin
 
 import tensorflow as tf
 import h5py
+import pathlib
 
 
 def loadWeights(
     model,
-    filename=os.path.join(__package__, "weights.h5"),
-    debug=True,
+    filename=os.path.join(pathlib.Path(__file__).parent.resolve(), "weights.h5"),
+    debug=False,
 ):
     with h5py.File(filename, "r") as f:
         # Every layer is an h5 group. Ignore non-groups (such as /0)

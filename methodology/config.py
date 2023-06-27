@@ -28,14 +28,15 @@ class Config(object):
     )
     agouti_media_path: str = r"C:\Users\gijst\Documents\Master Data Science\Thesis\flevopark-20230202124032\media.csv"
     agouti_observations_path: str = r"C:\Users\gijst\Documents\Master Data Science\Thesis\flevopark-20230202124032\observations.csv"
-    agouti_filepath = r"C:\Users\gijst\Documents\Master Data Science\Thesis\agouti_data\agouti.pkl"
-    audio_folder = r"C:\Users\gijst\Documents\Master Data Science\Thesis\audio_data\data\20230417"
+    agouti_filepath = r"G:\thesis\ThesisRodentClassification\agouti.pkl"
+    audio_folder = r"G:\AudioFiles\audio"
     slice_len: int = 25
     step_size: float = 0.9
-    cropped_audio_path = r"C:\Users\gijst\Documents\Master Data Science\Thesis\processed_data"
+    cropped_audio_path = r"G:\thesis\ThesisRodentClassification\processed_data"
     output_path: str = (
-        r"C:\Users\gijst\Documents\Master Data Science\Thesis\processed_data"
+        r"G:\thesis\ThesisRodentClassification\processed_data"
     )
+    zip_path: str = r"G:\AudioFiles\transfer_2170277_files_c1d6494b.zip"
     # get number of cpus
     num_cpus: int = multiprocessing.cpu_count()
     target_sample_rate: int = 16000

@@ -631,15 +631,23 @@ def create_audio_from_agouti_and_arise_data(config: Config, agouti: pd.DataFrame
     arise_df = pd.read_pickle(arise_df_path)
 
     # create new column in agouti with site ID, join with underscore
-    agouti["site_id"] = agouti["fileName"].str.split("-").str[1].str.split("_").str[0:2].str.join("_")
+    agouti["site_id"] = (
+        agouti["fileName"].str.split("-").str[1].str.split("_").str[0:2].str.join("_")
+    )
     arise_df["site_id"] = arise_df["deployment"].str.split("_").str[0:2].str.join("_")
     # convert recording_dt to datetime
     arise_df["recording_dt"] = pd.to_datetime(arise_df["recording_dt"])
-    arise_df["end_time"] = arise_df["recording_dt"] + pd.to_timedelta(arise_df['duration'], unit='s')
-    merge_df = pd.merge(agouti, arise_df, on=["site_id"], suffixes=("_agouti", "_arise"))
-    merge_df["is_in_range"] = merge_df.apply(lambda row: row['recording_dt'] <= row['timestamp'] <= row['end_time'], axis=1)
+    arise_df["end_time"] = arise_df["recording_dt"] + pd.to_timedelta(
+        arise_df["duration"], unit="s"
+    )
+    merge_df = pd.merge(
+        agouti, arise_df, on=["site_id"], suffixes=("_agouti", "_arise")
+    )
+    merge_df["is_in_range"] = merge_df.apply(
+        lambda row: row["recording_dt"] <= row["timestamp"] <= row["end_time"], axis=1
+    )
     filtered_df = merge_df.query("is_in_range == True")
-    x=1
+    x = 1
 
 
 def test():

@@ -50,7 +50,26 @@ def move_flac_files(src, dest):
             print(f"Removed empty directory: {dirpath}")
 
 
-def process_zip_file(config, zip_path, output_path, agouti: pd.DataFrame):
+def process_zip_file(
+    config: Config, zip_path: str, output_path: str, agouti: pd.DataFrame
+) -> None:
+    """Process the zip file and extract the audio files
+
+    Args:
+        config (Config): configuration object
+        zip_path (str): path to the zip file
+        output_path (str): path to the output folder
+        agouti (pd.DataFrame): agouti dataframe
+    """
+    setups = pd.read_pickle(r"G:\thesis\ThesisRodentClassification\setups.pkl")
+    arise = pd.read_pickle(
+        r"G:\thesis\ThesisRodentClassification\pandas_df_arise_api_gijs_data_request1.pkl"
+    )
+    arise["recording_dt"] = pd.to_datetime(arise["recording_dt"], utc=True)
+    in_setups = []
+    in_arise = []
+    total = []
+    no_match_df = pd.DataFrame()
     with zipfile.ZipFile(zip_path, "r") as myzip:
         for filename in tqdm.tqdm(myzip.namelist()):
             myzip.extract(filename, output_path)
@@ -75,6 +94,7 @@ def process_zip_file(config, zip_path, output_path, agouti: pd.DataFrame):
                         audio_length = get_audio_file_length(
                             os.path.join(dirpath, filename)
                         )
+                        # for testing purposes, if no match is found, check the nearest match and add to dataframe
                         start_time = get_timestamp_from_audio_file(filename)
                         end_time = start_time + pd.Timedelta(seconds=audio_length)
                         site_id = get_site_id_from_audio_file(filename)
@@ -83,6 +103,24 @@ def process_zip_file(config, zip_path, output_path, agouti: pd.DataFrame):
                         agouti_filtered = agouti.query(
                             "fileName.str.contains(@site_id) & timestamp >= @start_time and timestamp <= @end_time"
                         )
+                        # check if site id and date is in setups
+                        setups_filtered = setups[
+                            setups.str.contains(site_id)
+                            & setups.str.contains(start_time.strftime("%Y-%m-%d"))
+                        ]
+                        if not setups_filtered.empty:
+                            in_setups.append(filename)
+                        # check if site id and date is in arise
+                        arise_filtered = arise[
+                            arise.deployment.str.contains(site_id)
+                            & arise.recording_dt.dt.date.eq(start_time.date()
+                            )
+                        ]
+                        # check if site_id and date is in arise
+                        if not arise_filtered.empty:
+                            in_arise.append(filename)
+
+                        total.append(filename)
                         if not agouti_filtered.empty:
                             for index, row in tqdm.tqdm(
                                 agouti_filtered.iterrows(),
@@ -112,21 +150,28 @@ def process_zip_file(config, zip_path, output_path, agouti: pd.DataFrame):
                                     loop_counter += 1
                                 if loop_check:
                                     continue
-                                # convert start and end time to seconds from start of audio file
-                                start_time_seconds = (
+
+                                # get time difference in seconds between start and timestamp
+                                time_difference = (
                                     timestamp - start_time
                                 ).total_seconds()
-                                end_time_seconds = (
-                                    timestamp + pd.Timedelta(seconds=audio_length)
-                                    - start_time
-                                ).total_seconds()
-                                random_start_time_seconds = (
+                                # get time difference in seconds between start and random timestamp
+                                random_time_difference = (
                                     random_timestamp - start_time
                                 ).total_seconds()
+                                # create start and end time for cropped audio file
+                                start_time_seconds = (
+                                    time_difference - config.audio_length / 2
+                                )
+                                end_time_seconds = (
+                                    time_difference + config.audio_length / 2
+                                )
+                                random_start_time_seconds = (
+                                    random_time_difference - config.audio_length / 2
+                                )
                                 random_end_time_seconds = (
-                                    random_timestamp + pd.Timedelta(seconds=audio_length)
-                                    - start_time
-                                ).total_seconds()
+                                    random_time_difference + config.audio_length / 2
+                                )
                                 # check if start and end time are within audio file
                                 if (
                                     start_time_seconds < 0
@@ -137,7 +182,7 @@ def process_zip_file(config, zip_path, output_path, agouti: pd.DataFrame):
                                     random_start_time_seconds < 0
                                     or random_end_time_seconds > audio_length
                                 ):
-                                    continue                                
+                                    continue
 
                                 # save cropped audio file
                                 save_audio_file_start_end(
@@ -158,7 +203,42 @@ def process_zip_file(config, zip_path, output_path, agouti: pd.DataFrame):
                                     file_path=os.path.join(dirpath, filename),
                                     index=loop_counter,
                                 )
-                                print(f'saved cropped audio file: {os.path.join(config.cropped_audio_path, "rats")} fpr site_id: {site_id} and timestamp: {timestamp}')
+                                print(
+                                    f'saved cropped audio file: {os.path.join(config.cropped_audio_path, "rats")} for site_id: {site_id} and timestamp: {timestamp}'
+                                )
+
+                        else:
+                            # if no match is found, check the nearest match and add to dataframe
+                            start_time = get_timestamp_from_audio_file(filename)
+                            end_time = start_time + pd.Timedelta(seconds=audio_length)
+                            # get average time from start and end
+                            average_time = start_time + pd.Timedelta(seconds=audio_length / 2)
+                            site_id = get_site_id_from_audio_file(filename)
+
+                            # check agouti df for site_id
+                            agouti_filtered = agouti.query(
+                                "fileName.str.contains(@site_id)"
+                            )
+                            if not agouti_filtered.empty:
+                                # check nearest timestamp
+                                nearest_timestamp = min(
+                                    agouti_filtered["timestamp"],
+                                    key=lambda x: abs(x - average_time),
+                                )
+                                # get time difference in seconds between average time and nearest timestamp
+                                time_difference = (
+                                    nearest_timestamp - average_time
+                                ).total_seconds()
+                                # add filename and time difference to dataframe
+                                no_match_df = no_match_df.append(
+                                    {
+                                        "filename": filename,
+                                        "time_difference": time_difference,
+                                    },
+                                    ignore_index=True,
+                                ) # type: ignore
+
+
                         # when processed remove the file
                         os.remove(os.path.join(dirpath, filename))
                         print(f"Removed file: {os.path.join(dirpath, filename)}")
@@ -170,7 +250,58 @@ def process_zip_file(config, zip_path, output_path, agouti: pd.DataFrame):
                 if not os.listdir(dirpath):
                     os.rmdir(dirpath)
                     print(f"Removed empty directory: {dirpath}")
+    # export in_setups and in_arise and total to csv
+    pd.DataFrame(in_setups).to_csv(
+        r"G:\thesis\ThesisRodentClassification\in_setups.csv"
+    )
+    pd.DataFrame(in_arise).to_csv(r"G:\thesis\ThesisRodentClassification\in_arise.csv")
+    pd.DataFrame(total).to_csv(r"G:\thesis\ThesisRodentClassification\total.csv")
+    no_match_df.to_csv(r"G:\thesis\ThesisRodentClassification\no_match_df.csv")
 
+
+def check_arise_df(arise_df: pd.DataFrame, config: Config, agouti_df: pd.DataFrame) -> pd.DataFrame:
+    """Check how many matches are found in the arise dataframe
+
+    Args:
+        arise_df (pd.DataFrame): _description_
+        config (Config): _description_
+        agouti_df (pd.DataFrame): _description_
+
+    Returns:
+        pd.DataFrame: _description_
+    """
+    match_df = pd.DataFrame()
+    total_datapoints = 0
+    # iterate over arise dataframe
+    for index, row in tqdm.tqdm(arise_df.iterrows(), total=arise_df.shape[0]):
+        filename = row["filename"]
+        # get start time of audio file
+        start_time = get_timestamp_from_audio_file(filename)
+        # get duration of audio file
+        audio_length = int(row.extrainfo['duration'])
+        # get end time of audio file
+        end_time = start_time + pd.Timedelta(seconds=audio_length)
+        # get site id of audio file
+        site_id = get_site_id_from_audio_file(filename)
+        site_id = site_id + "_"
+        # filter agouti data
+        agouti_filtered = agouti_df.query(
+            "fileName.str.contains(@site_id) & timestamp >= @start_time and timestamp <= @end_time"
+        )
+        # add matches to match dataframe
+        if not agouti_filtered.empty:
+            match_df = match_df.append(
+                {
+                    "filename": filename,
+                    "start_time": start_time,
+                    "end_time": end_time,
+                    "site_id": site_id,
+                    "agouti_matches": len(agouti_filtered),
+                },
+                ignore_index=True,
+            ) # type: ignore
+        total_datapoints += len(agouti_filtered)
+    return match_df        
 
 def return_audio_file_and_remove_rest(audio_file_names: list, audio_folder):
     """Remove all files from the audio_folder except the ones in audio_file_names"""
@@ -190,7 +321,11 @@ def return_audio_file_and_remove_rest(audio_file_names: list, audio_folder):
 if __name__ == "__main__":
     config = Config()
     agouti = load_agouti_data(config)
+    """
     # check run time
     start_time = time.time()
     process_zip_file(config, config.zip_path, config.audio_folder, agouti)
-    print(f"Run time: {time.time() - start_time}")
+    print(f"Run time: {time.time() - start_time}") """
+    arise_df = pd.read_pickle(r'G:\thesis\ThesisRodentClassification\gijs_datarequest_arise_full.pkl')
+    match_df = check_arise_df(arise_df=arise_df, config=config, agouti_df=agouti)
+    x=1

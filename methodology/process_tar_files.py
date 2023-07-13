@@ -1,3 +1,4 @@
+from email.mime import audio
 import os
 import random
 import shutil
@@ -70,6 +71,7 @@ def process_zip_file(
     in_arise = []
     total = []
     no_match_df = pd.DataFrame()
+    no_length_with_size = []
     with zipfile.ZipFile(zip_path, "r") as myzip:
         for filename in tqdm.tqdm(myzip.namelist()):
             myzip.extract(filename, output_path)
@@ -94,6 +96,16 @@ def process_zip_file(
                         audio_length = get_audio_file_length(
                             os.path.join(dirpath, filename)
                         )
+                        # get filesize of audio file
+                        filesize = os.path.getsize(os.path.join(dirpath, filename))
+                        if filesize > 200 and audio_length == 0:
+                            no_length_with_size.append(
+                                {
+                                    "filename": filename,
+                                    "filesize": filesize,
+                                    "audio_length": audio_length,
+                                }
+                            )
                         # for testing purposes, if no match is found, check the nearest match and add to dataframe
                         start_time = get_timestamp_from_audio_file(filename)
                         end_time = start_time + pd.Timedelta(seconds=audio_length)
@@ -113,8 +125,7 @@ def process_zip_file(
                         # check if site id and date is in arise
                         arise_filtered = arise[
                             arise.deployment.str.contains(site_id)
-                            & arise.recording_dt.dt.date.eq(start_time.date()
-                            )
+                            & arise.recording_dt.dt.date.eq(start_time.date())
                         ]
                         # check if site_id and date is in arise
                         if not arise_filtered.empty:
@@ -212,7 +223,9 @@ def process_zip_file(
                             start_time = get_timestamp_from_audio_file(filename)
                             end_time = start_time + pd.Timedelta(seconds=audio_length)
                             # get average time from start and end
-                            average_time = start_time + pd.Timedelta(seconds=audio_length / 2)
+                            average_time = start_time + pd.Timedelta(
+                                seconds=audio_length / 2
+                            )
                             site_id = get_site_id_from_audio_file(filename)
 
                             # check agouti df for site_id
@@ -236,8 +249,7 @@ def process_zip_file(
                                         "time_difference": time_difference,
                                     },
                                     ignore_index=True,
-                                ) # type: ignore
-
+                                )  # type: ignore
 
                         # when processed remove the file
                         os.remove(os.path.join(dirpath, filename))
@@ -256,10 +268,15 @@ def process_zip_file(
     )
     pd.DataFrame(in_arise).to_csv(r"G:\thesis\ThesisRodentClassification\in_arise.csv")
     pd.DataFrame(total).to_csv(r"G:\thesis\ThesisRodentClassification\total.csv")
+    pd.DataFrame(no_length_with_size).to_csv(
+        r"G:\thesis\ThesisRodentClassification\no_length_with_size.csv"
+    )
     no_match_df.to_csv(r"G:\thesis\ThesisRodentClassification\no_match_df.csv")
 
 
-def check_arise_df(arise_df: pd.DataFrame, config: Config, agouti_df: pd.DataFrame) -> pd.DataFrame:
+def check_arise_df(
+    arise_df: pd.DataFrame, config: Config, agouti_df: pd.DataFrame
+) -> pd.DataFrame:
     """Check how many matches are found in the arise dataframe
 
     Args:
@@ -278,7 +295,7 @@ def check_arise_df(arise_df: pd.DataFrame, config: Config, agouti_df: pd.DataFra
         # get start time of audio file
         start_time = get_timestamp_from_audio_file(filename)
         # get duration of audio file
-        audio_length = int(row.extrainfo['duration'])
+        audio_length = int(row.extrainfo["duration"])
         # get end time of audio file
         end_time = start_time + pd.Timedelta(seconds=audio_length)
         # get site id of audio file
@@ -290,18 +307,21 @@ def check_arise_df(arise_df: pd.DataFrame, config: Config, agouti_df: pd.DataFra
         )
         # add matches to match dataframe
         if not agouti_filtered.empty:
-            match_df = match_df.append(
-                {
-                    "filename": filename,
-                    "start_time": start_time,
-                    "end_time": end_time,
-                    "site_id": site_id,
-                    "agouti_matches": len(agouti_filtered),
-                },
-                ignore_index=True,
-            ) # type: ignore
+            new_row = pd.DataFrame(
+                [
+                    {
+                        "filename": filename,
+                        "start_time": start_time,
+                        "end_time": end_time,
+                        "site_id": site_id,
+                        "agouti_matches": len(agouti_filtered),
+                    }
+                ]
+            )
+            match_df = pd.concat([match_df, new_row], ignore_index=True)
         total_datapoints += len(agouti_filtered)
-    return match_df        
+    return match_df
+
 
 def return_audio_file_and_remove_rest(audio_file_names: list, audio_folder):
     """Remove all files from the audio_folder except the ones in audio_file_names"""
@@ -321,11 +341,13 @@ def return_audio_file_and_remove_rest(audio_file_names: list, audio_folder):
 if __name__ == "__main__":
     config = Config()
     agouti = load_agouti_data(config)
-    """
     # check run time
-    start_time = time.time()
+    """ start_time = time.time()
     process_zip_file(config, config.zip_path, config.audio_folder, agouti)
     print(f"Run time: {time.time() - start_time}") """
-    arise_df = pd.read_pickle(r'G:\thesis\ThesisRodentClassification\gijs_datarequest_arise_full.pkl')
+    
+    arise_df = pd.read_pickle(
+        r"G:\thesis\ThesisRodentClassification\gijs_datarequest_arise_full.pkl"
+    )
     match_df = check_arise_df(arise_df=arise_df, config=config, agouti_df=agouti)
-    x=1
+    match_df.to_csv(r"G:\thesis\ThesisRodentClassification\match_df.csv")

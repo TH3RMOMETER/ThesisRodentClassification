@@ -1,8 +1,10 @@
 import os
+from random import sample
 import sys
 
 import librosa
 import matplotlib.pyplot as plt
+import numpy as np
 import torchmetrics
 from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau
 from lightning.pytorch.callbacks import ModelCheckpoint as pl_ModelCheckpoint
@@ -82,6 +84,7 @@ class AudioDataset(Dataset):
         spectrogram=False,
         long=False,
         model_type="test",
+        train_test = "train"
     ):
         self.df = df
         self.file_paths = df["file_path"].values
@@ -97,6 +100,7 @@ class AudioDataset(Dataset):
         self.spectrogram = spectrogram
         self.long = long
         self.model_type = model_type
+        self.train_test = train_test
 
     def __len__(self):
         return len(self.df)
@@ -112,6 +116,11 @@ class AudioDataset(Dataset):
         if sample_rate != self.target_sample_rate:
             resample = T.Resample(sample_rate, self.target_sample_rate)
             audio = resample(audio)
+        
+
+        # apply data augmentation, only for training
+        if self.train_test == "train":
+            audio = self.augment(audio, self.target_sample_rate)
 
         # Adjust number of samples
         if audio.shape[0] > self.num_samples:
@@ -167,14 +176,48 @@ class AudioDataset(Dataset):
 
         return torch.stack([mfcc]), torch.tensor(self.labels[index]).float()
 
+    def select_augment_strategy(self):
+        """Select augmentation strategy from a list of options.
+
+        Returns:
+            np.ndarray: array of selected options
+        """
+        options = ["add_noise", "time_stretch", "pitch_shift"]
+        # from these options, randomly select none to all
+        num_options = np.random.randint(0, len(options) + 1)
+        # randomly select options
+        selected_options = np.random.choice(options, num_options, replace=False)
+        return selected_options
+
+    def augment(self, audio, sample_rate):
+        """Apply augmentation to audio and return augmented audio"""
+
+        # select augmentation strategy
+        selected_options = self.select_augment_strategy()
+        # apply augmentation
+        for option in selected_options:
+            if option == "add_noise":
+                # select a random sigma from acceptable range: [0.001, 0.015]
+                sigma = np.random.uniform(0.001, 0.015)
+                noise = sigma * torch.randn_like(audio)
+                audio = audio + noise
+            elif option == "time_stretch":
+                # select rate from acceptable range: [0.8, 1.25]
+                rate = np.random.uniform(0.8, 1.25)
+                audio = torchaudio.transforms.TimeStretch()(audio, rate=rate)
+            elif option == "pitch_shift":
+                # select n_steps from -4 to 4, where 0 is no change
+                n_steps = np.random.randint(-4, 5)
+                while n_steps == 0:
+                    n_steps = np.random.randint(-4, 5)
+                audio = torchaudio.transforms.PitchShift(
+                    sample_rate=sample_rate, n_steps=n_steps
+                )(audio)
+        return audio
+
 
 class AudioModel(pl.LightningModule):
-    def __init__(
-        self,
-        config: Config,
-        num_classes: int,
-        input_shape
-    ):
+    def __init__(self, config: Config, num_classes: int, input_shape):
         super().__init__()
         self.model = config.create_network()
         in_features = self.model.fc.in_features  # type: ignore
@@ -468,9 +511,9 @@ def train_keras_network(
     # get model metrics
     metrics = {}
     for i, metric in enumerate(model.metrics_names):
-        metrics[f'test_{metric}'] = test_stats[i]
+        metrics[f"test_{metric}"] = test_stats[i]
     wandb.log(metrics)
-    
+
     run.finish()  # type: ignore
 
 
@@ -542,7 +585,9 @@ def train_torch_network(
     # test the model
     test = trainer.test(model=audio_model, dataloaders=test_loader)
     # add test in front of metrics if test is not in front
-    test[0] = {f"test_{key}": value for key, value in test[0].items() if "test" not in key}
+    test[0] = {
+        f"test_{key}": value for key, value in test[0].items() if "test" not in key
+    }
     wandb_logger.log_metrics(test[0])
     wandb_logger.experiment.finish()
 
@@ -586,8 +631,8 @@ def experiments():
         resnet_spec,
         resnet_mfcc,
         resnet_mfcc_delta,
-        resnet_mfcc_delta_delta
-        ]
+        resnet_mfcc_delta_delta,
+    ]
     return experiment_list
 
 

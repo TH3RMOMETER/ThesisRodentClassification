@@ -1,16 +1,14 @@
 import os
-from random import sample
 import sys
-
+from random import sample
 import librosa
+
 import matplotlib.pyplot as plt
 import numpy as np
 import torchmetrics
 from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau
 from lightning.pytorch.callbacks import ModelCheckpoint as pl_ModelCheckpoint
-from PIL import Image
-from sklearn.preprocessing import MinMaxScaler, normalize
-from transformers import ASTForAudioClassification, AutoFeatureExtractor
+from sklearn.model_selection import train_test_split
 from wandb.keras import WandbCallback
 
 sys.path.append(r"G:\thesis\ThesisRodentClassification")
@@ -25,6 +23,7 @@ import torch.optim as optim
 # Audio processing
 import torchaudio
 import torchaudio.transforms as T
+import wandb
 from config import Config
 
 # from ast_master.src.dataloader import AudiosetDataset
@@ -36,8 +35,6 @@ from tensorflow.compat.v1 import ConfigProto, InteractiveSession
 from torch.optim import lr_scheduler
 from torch.utils.data import DataLoader, Dataset
 from torchmetrics.classification import BinaryAUROC, BinaryF1Score
-
-import wandb
 
 
 def fix_gpu():
@@ -84,7 +81,7 @@ class AudioDataset(Dataset):
         spectrogram=False,
         long=False,
         model_type="test",
-        train_test = "train"
+        train_test="train",
     ):
         self.df = df
         self.file_paths = df["file_path"].values
@@ -110,13 +107,12 @@ class AudioDataset(Dataset):
         audio, sample_rate = torchaudio.load(self.file_paths[index])  # type: ignore
 
         # Convert to mono
-        audio = torch.mean(audio, axis=0)  # type: ignore
+        audio = torch.mean(audio, dim=0)  # type: ignore
 
         # Resample
         if sample_rate != self.target_sample_rate:
             resample = T.Resample(sample_rate, self.target_sample_rate)
             audio = resample(audio)
-        
 
         # apply data augmentation, only for training
         if self.train_test == "train":
@@ -204,7 +200,11 @@ class AudioDataset(Dataset):
             elif option == "time_stretch":
                 # select rate from acceptable range: [0.8, 1.25]
                 rate = np.random.uniform(0.8, 1.25)
-                audio = torchaudio.transforms.TimeStretch()(audio, rate=rate)
+                # convert audio to numpy array
+                audio = audio.detach().numpy()
+                audio = librosa.effects.time_stretch(audio, rate=rate)
+                # convert back to torch tensor
+                audio = torch.from_numpy(audio)
             elif option == "pitch_shift":
                 # select n_steps from -4 to 4, where 0 is no change
                 n_steps = np.random.randint(-4, 5)
@@ -427,10 +427,14 @@ def train_ast_model(config: Config, train_audio_df: pd.DataFrame):
         pin_memory=True,
     )
 
-    # wandb_logger = WandbLogger(project="test_rat_USV", reinit=True)
+    wandb_logger = WandbLogger(
+        project="Rat_classification_test",
+        reinit=True,
+        name=f"{config.model_type}_spec_{config.spectrogram}_D_{config.delta}_DD_{config.delta_delta}",
+    )
     trainer = pl.Trainer(
         max_epochs=config.epochs,
-        # logger=wandb_logger,
+        logger=wandb_logger,
         log_every_n_steps=1,
         accelerator="gpu",
     )
@@ -484,7 +488,7 @@ def train_keras_network(
 
     # create wandb logger
     run = wandb.init(
-        project="test_rat_USV",
+        project="Rat_classification_test",
         reinit=True,
         name=f"{config.model_type}_spec_{config.spectrogram}_D_{config.delta}_DD_{config.delta_delta}",
         config=config.__dict__,
@@ -548,7 +552,7 @@ def train_torch_network(
 
     # create wandb logger
     wandb_logger = WandbLogger(
-        project="test_rat_USV",
+        project="Rat_classification_test",
         log_model=True,
         name=f"{config.model_type}_spec_{config.spectrogram}_D_{config.delta}_DD_{config.delta_delta}",
     )
@@ -564,8 +568,8 @@ def train_torch_network(
     audio_model = AudioModel(input_shape=audio_shape, config=config, num_classes=1)
 
     # create dataloaders
-    train_loader = DataLoader(train_set, batch_size=config.batch_size, shuffle=True)
-    val_loader = DataLoader(val_set, batch_size=config.batch_size, shuffle=False)
+    train_loader = DataLoader(train_set, batch_size=config.batch_size, shuffle=True, num_workers=num_cpus)
+    val_loader = DataLoader(val_set, batch_size=config.batch_size, shuffle=False, num_workers=num_cpus)
     test_loader = DataLoader(
         test_audio_set, batch_size=config.batch_size, shuffle=False
     )
@@ -581,18 +585,11 @@ def train_torch_network(
     trainer.fit(
         model=audio_model, train_dataloaders=train_loader, val_dataloaders=val_loader
     )
-
-    # test the model
-    test = trainer.test(model=audio_model, dataloaders=test_loader)
-    # add test in front of metrics if test is not in front
-    test[0] = {
-        f"test_{key}": value for key, value in test[0].items() if "test" not in key
-    }
-    wandb_logger.log_metrics(test[0])
+    trainer.test(audio_model, test_loader)
     wandb_logger.experiment.finish()
 
 
-def experiments():
+def experiments() -> list:
     yolo_spec = Config(model_type="yolo", spectrogram=True)
     yolo_mfcc = Config(model_type="yolo", spectrogram=False)
     yolo_mfcc_delta = Config(model_type="yolo", spectrogram=False, delta=True)
@@ -612,7 +609,7 @@ def experiments():
         model_type="resnet", spectrogram=False, delta=False, delta_delta=True
     )
 
-    """  experiment_list = [
+    experiment_list = [
         yolo_spec,
         yolo_mfcc,
         yolo_mfcc_delta,
@@ -625,13 +622,6 @@ def experiments():
         resnet_mfcc,
         resnet_mfcc_delta,
         resnet_mfcc_delta_delta,
-    ] """
-
-    experiment_list = [
-        resnet_spec,
-        resnet_mfcc,
-        resnet_mfcc_delta,
-        resnet_mfcc_delta_delta,
     ]
     return experiment_list
 
@@ -639,3 +629,13 @@ def experiments():
 if __name__ == "__main__":
     config = Config()
     fix_gpu()
+    experiments = experiments()  # type: ignore
+    audio_df = create_df_from_audio_filepaths(config)
+    train_audio, test_audio = train_test_split(audio_df, test_size=0.2)
+    for experiment in experiments:  # type: ignore
+        # if experiment model type contains yolo, train yolo model
+        if "yolo" in experiment.model_type:
+            train_keras_network(experiment, train_audio_df=train_audio, test_audio_df=test_audio)
+        # if experiment model type contains resnet, train resnet model
+        elif "resnet" in experiment.model_type:
+            train_torch_network(experiment, train_audio_df=train_audio, test_audio_df=test_audio)

@@ -60,7 +60,7 @@ class DataGenerator(k.utils.Sequence):
                 self.iter
             )  # generation of data handled by pytorch dataloader
         # swap dimensions of image data to match tf.keras dimension ordering
-        ims = np.swapaxes(np.swapaxes(ims.numpy(), 1, 3), 1, 2)
+        ims = np.swapaxes(np.swapaxes(ims.detach().numpy(), 1, 3), 1, 2)
         # convert labels to numpy ints
         lbs = lbs.numpy().astype(int)
         return ims, lbs

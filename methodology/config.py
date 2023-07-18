@@ -16,10 +16,10 @@ class Config(object):
     delta: bool = True
     delta_delta: bool = False
     num_classes: int = 1
-    batch_size: int = 3
-    epochs: int = 3
+    batch_size: int = 4
+    epochs: int = 100
     learning_rate: float = 0.001
-    max_epochs: int = 3
+    max_epochs: int = 100
     max_lr: float = 0.01
     audio_length: int = 240
     n_mfcc: int = 40
@@ -36,7 +36,7 @@ class Config(object):
     output_path: str = (
         r"G:\thesis\ThesisRodentClassification\processed_data"
     )
-    zip_path: str = r"G:\AudioFiles\transfer_2170277_files_c1d6494b.zip"
+    zip_path: str = r"G:\AudioFiles\transfer_2243057_files_97cccc47.zip"
     # get number of cpus
     num_cpus: int = multiprocessing.cpu_count()
     target_sample_rate: int = 16000

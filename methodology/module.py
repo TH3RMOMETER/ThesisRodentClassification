@@ -1,9 +1,12 @@
+import lightning.pytorch as pl
 import numpy as np
-import torch
-import wandb
+import tensorflow as tf
 import tensorflow.keras as k
 import tensorflow.keras.backend as K
-import lightning.pytorch as pl
+import torch
+from tensorflow.keras.metrics import Metric
+
+import wandb
 
 
 class DataGenerator(k.utils.Sequence):
@@ -70,6 +73,65 @@ class DataGenerator(k.utils.Sequence):
         function that returns the number of batches in one epoch
         """
         return len(self.gen)
+
+
+class RecallMetric(Metric):
+    def __init__(self, name='recall', **kwargs):
+        super(RecallMetric, self).__init__(name=name, **kwargs)
+
+    def update_state(self, y_true, y_pred, sample_weight=None):
+        y_true = tf.cast(y_true, tf.float32) # Ensuring y_true is float32
+        y_pred = tf.cast(y_pred, tf.float32) # Ensuring y_pred is float32
+        true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
+        possible_positives = K.sum(K.round(K.clip(y_true, 0, 1)))
+        recall = true_positives / (possible_positives + K.epsilon())
+        self.recall = recall
+
+    def result(self):
+        return self.recall
+
+    def reset_state(self):
+        self.recall = 0
+
+
+
+class PrecisionMetric(Metric):
+    def __init__(self, name="precision", **kwargs):
+        super(PrecisionMetric, self).__init__(name=name, **kwargs)
+
+    def update_state(self, y_true, y_pred, sample_weight=None):
+        y_true = tf.cast(y_true, tf.float32) # Ensuring y_true is float32
+        y_pred = tf.cast(y_pred, tf.float32) # Ensuring y_pred is float32
+        true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
+        predicted_positives = K.sum(K.round(K.clip(y_pred, 0, 1)))
+        precision = true_positives / (predicted_positives + K.epsilon())
+        self.precision = precision
+
+    def result(self):
+        return self.precision
+
+    def reset_state(self):
+        self.precision = 0
+
+
+class F1Metric(Metric):
+    def __init__(self, name="f1", **kwargs):
+        super(F1Metric, self).__init__(name=name, **kwargs)
+
+    def update_state(self, y_true, y_pred, sample_weight=None):
+        y_true = tf.cast(y_true, tf.float32) # Ensuring y_true is float32
+        y_pred = tf.cast(y_pred, tf.float32) # Ensuring y_pred is float32
+        precision = PrecisionMetric()
+        recall = RecallMetric()
+        precision.update_state(y_true, y_pred)
+        recall.update_state(y_true, y_pred)
+        self.f1 = 2 * ((precision.result() * recall.result()) / (precision.result() + recall.result() + K.epsilon()))
+
+    def result(self):
+        return self.f1
+
+    def reset_state(self):
+        self.f1 = 0
 
 
 def recall_m(y_true, y_pred):

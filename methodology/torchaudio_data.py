@@ -1,12 +1,13 @@
 import os
 import sys
-from random import sample
-import librosa
 
+import keras_metrics as km
+import librosa
 import matplotlib.pyplot as plt
 import numpy as np
 import torchmetrics
-from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau
+from keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
+from lightning.pytorch.callbacks import EarlyStopping as pl_EarlyStopping
 from lightning.pytorch.callbacks import ModelCheckpoint as pl_ModelCheckpoint
 from sklearn.model_selection import train_test_split
 from wandb.keras import WandbCallback
@@ -23,18 +24,19 @@ import torch.optim as optim
 # Audio processing
 import torchaudio
 import torchaudio.transforms as T
-import wandb
 from config import Config
 
 # from ast_master.src.dataloader import AudiosetDataset
 # from ast_master.src.models import ASTModel
 from lightning.pytorch.loggers import WandbLogger
-from module import DataGenerator, f1_m, precision_m, recall_m
+from module import DataGenerator, F1Metric, PrecisionMetric, RecallMetric
 from tensorflow import keras
 from tensorflow.compat.v1 import ConfigProto, InteractiveSession
 from torch.optim import lr_scheduler
 from torch.utils.data import DataLoader, Dataset
 from torchmetrics.classification import BinaryAUROC, BinaryF1Score
+
+import wandb
 
 
 def fix_gpu():
@@ -148,7 +150,7 @@ class AudioDataset(Dataset):
             # convert audio to spectrogram
             spec = torchaudio.transforms.Spectrogram(n_fft=nftt, normalized=True)(audio)
 
-            return torch.stack([spec]), torch.tensor(self.labels[index]).float()
+            return torch.stack([spec]).detach(), torch.tensor(self.labels[index]).float()
 
         # Convert to MFCC
         nftt = 0.0032
@@ -170,7 +172,7 @@ class AudioDataset(Dataset):
             mfcc = torchaudio.transforms.ComputeDeltas()(mfcc)
             mfcc = torchaudio.transforms.ComputeDeltas()(mfcc)
 
-        return torch.stack([mfcc]), torch.tensor(self.labels[index]).float()
+        return torch.stack([mfcc]).detach(), torch.tensor(self.labels[index]).float()
 
     def select_augment_strategy(self):
         """Select augmentation strategy from a list of options.
@@ -213,6 +215,7 @@ class AudioDataset(Dataset):
                 audio = torchaudio.transforms.PitchShift(
                     sample_rate=sample_rate, n_steps=n_steps
                 )(audio)
+                audio.detach()
         return audio
 
 
@@ -253,6 +256,16 @@ class AudioModel(pl.LightningModule):
             }
         )
 
+        self.metric_collection_test = torchmetrics.MetricCollection(
+            {
+                "test_accuracy": torchmetrics.Accuracy(task="binary"),
+                "test_f1": BinaryF1Score(),
+                "test_roc": BinaryAUROC(),
+                "test_precision": torchmetrics.Precision(task="binary"),
+                "test_recall": torchmetrics.Recall(task="binary"),
+            }
+        )
+
         self.save_hyperparameters()
 
     def forward(self, images):
@@ -288,7 +301,8 @@ class AudioModel(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         x, y = batch
         logits, loss = self.loss(x, y.unsqueeze(1))
-        self.metric_collection_val.update(logits, y.unsqueeze(1))
+        logits_int = logits.round().long()
+        self.metric_collection_val.update(logits_int, y.unsqueeze(1))
         self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log_dict(
             self.metric_collection_val, on_step=False, on_epoch=True, prog_bar=True  # type: ignore
@@ -300,7 +314,7 @@ class AudioModel(pl.LightningModule):
         self.metric_collection.update(logits, y.unsqueeze(1))
         self.log("test_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log_dict(
-            self.metric_collection, on_step=False, on_epoch=True, prog_bar=True  # type: ignore
+            self.metric_collection_test, on_step=False, on_epoch=True, prog_bar=True  # type: ignore
         )
 
 
@@ -311,11 +325,13 @@ def create_model(config: Config, audio_shape: list):
             loss=keras.losses.BinaryCrossentropy(),
             optimizer=keras.optimizers.Adam(learning_rate=1e-3),
             metrics=[
-                keras.metrics.BinaryAccuracy(),
-                keras.metrics.AUC(),
-                f1_m,
-                precision_m,
-                recall_m,
+                keras.metrics.BinaryAccuracy(name="accuracy"),
+                keras.metrics.AUC(
+                    name="auc_roc", curve="ROC", num_thresholds=200, multi_label=False
+                ),
+                F1Metric(name="f1"),
+                PrecisionMetric(name="precision"),
+                RecallMetric(name="recall"),
             ],
         )  # type: ignore
         return yolo_network
@@ -428,7 +444,7 @@ def train_ast_model(config: Config, train_audio_df: pd.DataFrame):
     )
 
     wandb_logger = WandbLogger(
-        project="Rat_classification_test",
+        project="Rat_classification_2",
         reinit=True,
         name=f"{config.model_type}_spec_{config.spectrogram}_D_{config.delta}_DD_{config.delta_delta}",
     )
@@ -459,6 +475,7 @@ def train_keras_network(
         delta_delta=config.delta_delta,
         n_mfcc=config.n_mfcc,
         target_sample_rate=config.target_sample_rate,
+        train_test="train",
     )
     test_audio_set = AudioDataset(
         test_audio_df,
@@ -468,6 +485,7 @@ def train_keras_network(
         delta_delta=config.delta_delta,
         n_mfcc=config.n_mfcc,
         target_sample_rate=config.target_sample_rate,
+        train_test="test",
     )
 
     # split dataset
@@ -488,14 +506,14 @@ def train_keras_network(
 
     # create wandb logger
     run = wandb.init(
-        project="Rat_classification_test",
+        project="Rat_classification_2",
         reinit=True,
         name=f"{config.model_type}_spec_{config.spectrogram}_D_{config.delta}_DD_{config.delta_delta}",
         config=config.__dict__,
     )
     callbacks = [
         WandbCallback(save_model=False),
-        ReduceLROnPlateau(monitor="val_loss", factor=0.1, patience=5, verbose=1),
+        ReduceLROnPlateau(monitor="val_loss", factor=0.1, patience=3, verbose=1),
         ModelCheckpoint(
             filepath=f"models/{config.model_type}_spec_{config.spectrogram}_D_{config.delta}_DD_{config.delta_delta}.hdf5",
             monitor="val_loss",
@@ -503,6 +521,7 @@ def train_keras_network(
             mode="min",
             save_weights_only=True,
         ),
+        EarlyStopping(monitor="val_loss", patience=5, mode="min", verbose=1, min_delta=0, restore_best_weights=True),
     ]
 
     model = create_model(config, audio_shape)
@@ -534,6 +553,7 @@ def train_torch_network(
         delta_delta=config.delta_delta,
         target_sample_rate=config.target_sample_rate,
         n_mfcc=config.n_mfcc,
+        train_test="train",
     )
     test_audio_set = AudioDataset(
         test_audio_df,
@@ -542,6 +562,7 @@ def train_torch_network(
         delta_delta=config.delta_delta,
         target_sample_rate=config.target_sample_rate,
         n_mfcc=config.n_mfcc,
+        train_test="test",
     )
     # split dataset
     train_set, val_set = create_train_val_split(audio_df)
@@ -552,7 +573,7 @@ def train_torch_network(
 
     # create wandb logger
     wandb_logger = WandbLogger(
-        project="Rat_classification_test",
+        project="Rat_classification_2",
         log_model=True,
         name=f"{config.model_type}_spec_{config.spectrogram}_D_{config.delta}_DD_{config.delta_delta}",
     )
@@ -563,15 +584,25 @@ def train_torch_network(
         filename=f"{config.model_type}_spec_{config.spectrogram}_D_{config.delta}_DD_{config.delta_delta}",
         monitor="val_loss",
         verbose=True,
+        save_top_k=1,
+        mode="min",
+    )
+    # initialize the early stopping callback
+    early_stop_callback = pl_EarlyStopping(
+        monitor="val_loss", patience=5, strict=False, verbose=False, mode="min", min_delta=0.00
     )
     # create model and trainer
     audio_model = AudioModel(input_shape=audio_shape, config=config, num_classes=1)
 
     # create dataloaders
-    train_loader = DataLoader(train_set, batch_size=config.batch_size, shuffle=True, num_workers=num_cpus)
-    val_loader = DataLoader(val_set, batch_size=config.batch_size, shuffle=False, num_workers=num_cpus)
+    train_loader = DataLoader(
+        train_set, batch_size=2, shuffle=True, num_workers=6
+    )
+    val_loader = DataLoader(
+        val_set, batch_size=2, shuffle=False, num_workers=6
+    )
     test_loader = DataLoader(
-        test_audio_set, batch_size=config.batch_size, shuffle=False
+        test_audio_set, batch_size=2, shuffle=False
     )
 
     trainer = pl.Trainer(
@@ -579,7 +610,7 @@ def train_torch_network(
         logger=wandb_logger,
         log_every_n_steps=1,
         accelerator="gpu",
-        callbacks=[checkpoint_callback],
+        callbacks=[checkpoint_callback, early_stop_callback],
     )
     # train the model
     trainer.fit(
@@ -610,14 +641,6 @@ def experiments() -> list:
     )
 
     experiment_list = [
-        yolo_spec,
-        yolo_mfcc,
-        yolo_mfcc_delta,
-        yolo_mfcc_delta_delta,
-        long_yolo_spec,
-        long_yolo_mfcc,
-        long_yolo_mfcc_delta,
-        long_yolo_mfcc_delta_delta,
         resnet_spec,
         resnet_mfcc,
         resnet_mfcc_delta,
@@ -635,7 +658,11 @@ if __name__ == "__main__":
     for experiment in experiments:  # type: ignore
         # if experiment model type contains yolo, train yolo model
         if "yolo" in experiment.model_type:
-            train_keras_network(experiment, train_audio_df=train_audio, test_audio_df=test_audio)
+            train_keras_network(
+                experiment, train_audio_df=train_audio, test_audio_df=test_audio
+            )
         # if experiment model type contains resnet, train resnet model
         elif "resnet" in experiment.model_type:
-            train_torch_network(experiment, train_audio_df=train_audio, test_audio_df=test_audio)
+            train_torch_network(
+                experiment, train_audio_df=train_audio, test_audio_df=test_audio
+            )

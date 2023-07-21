@@ -150,7 +150,10 @@ class AudioDataset(Dataset):
             # convert audio to spectrogram
             spec = torchaudio.transforms.Spectrogram(n_fft=nftt, normalized=True)(audio)
 
-            return torch.stack([spec]).detach(), torch.tensor(self.labels[index]).float()
+            return (
+                torch.stack([spec]).detach(),
+                torch.tensor(self.labels[index]).float(),
+            )
 
         # Convert to MFCC
         nftt = 0.0032
@@ -220,9 +223,9 @@ class AudioDataset(Dataset):
 
 
 class AudioModel(pl.LightningModule):
-    def __init__(self, config: Config, num_classes: int, input_shape):
+    def __init__(self, config: Config, num_classes: int, input_shape, load_weights: bool = True):
         super().__init__()
-        self.model = config.create_network()
+        self.model = config.create_network(load_weights=load_weights)
         in_features = self.model.fc.in_features  # type: ignore
         self.model.fc = nn.Sequential(nn.Linear(in_features, num_classes))  # type: ignore
         first_conv_layer = nn.Conv2d(
@@ -250,7 +253,7 @@ class AudioModel(pl.LightningModule):
             {
                 "val_accuracy": torchmetrics.Accuracy(task="binary"),
                 "val_f1": BinaryF1Score(),
-                "auc_roc": BinaryAUROC(),
+                "val_auc_roc": BinaryAUROC(),
                 "val_precision": torchmetrics.Precision(task="binary"),
                 "val_recall": torchmetrics.Recall(task="binary"),
             }
@@ -260,7 +263,7 @@ class AudioModel(pl.LightningModule):
             {
                 "test_accuracy": torchmetrics.Accuracy(task="binary"),
                 "test_f1": BinaryF1Score(),
-                "test_roc": BinaryAUROC(),
+                "test_auc_roc": BinaryAUROC(),
                 "test_precision": torchmetrics.Precision(task="binary"),
                 "test_recall": torchmetrics.Recall(task="binary"),
             }
@@ -311,16 +314,19 @@ class AudioModel(pl.LightningModule):
     def test_step(self, batch, batch_idx):
         x, y = batch
         logits, loss = self.loss(x, y.unsqueeze(1))
-        self.metric_collection.update(logits, y.unsqueeze(1))
+        logits_int = logits.round().long()
+        self.metric_collection_test.update(logits_int, y.unsqueeze(1))
         self.log("test_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log_dict(
             self.metric_collection_test, on_step=False, on_epoch=True, prog_bar=True  # type: ignore
         )
 
 
-def create_model(config: Config, audio_shape: list):
+def create_model(config: Config, audio_shape: list, load_weights: bool = True):
     if config.model_type == "yolo" or "long_yolo":
-        yolo_network = config.create_network(shape=audio_shape)
+        yolo_network = config.create_network(
+            shape=audio_shape, load_weights=load_weights
+        )
         yolo_network.compile(  # type: ignore
             loss=keras.losses.BinaryCrossentropy(),
             optimizer=keras.optimizers.Adam(learning_rate=1e-3),
@@ -459,13 +465,18 @@ def train_ast_model(config: Config, train_audio_df: pd.DataFrame):
 
 
 def train_keras_network(
-    config: Config, train_audio_df: pd.DataFrame, test_audio_df: pd.DataFrame
+    config: Config,
+    train_audio_df: pd.DataFrame,
+    test_audio_df: pd.DataFrame,
+    load_weights: bool = True,
 ):
     """function for training YOLO and long YOLO pretrained models
 
     Args:
         config (Config): experiment setyp
         train_audio_df (pd.DataFrame): training dataframe
+        test_audio_df (pd.DataFrame): test dataframe
+        load_weights (bool, optional): whether to load pretrained weights. Defaults to True.
     """
     audio_df = AudioDataset(
         train_audio_df,
@@ -521,10 +532,17 @@ def train_keras_network(
             mode="min",
             save_weights_only=True,
         ),
-        EarlyStopping(monitor="val_loss", patience=5, mode="min", verbose=1, min_delta=0, restore_best_weights=True),
+        EarlyStopping(
+            monitor="val_loss",
+            patience=5,
+            mode="min",
+            verbose=1,
+            min_delta=0,
+            restore_best_weights=True,
+        ),
     ]
 
-    model = create_model(config, audio_shape)
+    model = create_model(config, audio_shape, load_weights=load_weights)
     # convert torch loader to keras compatible object
     train_loader = DataGenerator(train_loader, 2)
     val_loader = DataGenerator(val_loader, 2)
@@ -541,7 +559,10 @@ def train_keras_network(
 
 
 def train_torch_network(
-    config: Config, train_audio_df: pd.DataFrame, test_audio_df: pd.DataFrame
+    config: Config,
+    train_audio_df: pd.DataFrame,
+    test_audio_df: pd.DataFrame,
+    load_weights: bool = True,
 ):
     num_cpus = config.num_cpus
     torch.set_float32_matmul_precision("high")
@@ -589,21 +610,20 @@ def train_torch_network(
     )
     # initialize the early stopping callback
     early_stop_callback = pl_EarlyStopping(
-        monitor="val_loss", patience=5, strict=False, verbose=False, mode="min", min_delta=0.00
+        monitor="val_loss",
+        patience=5,
+        strict=False,
+        verbose=False,
+        mode="min",
+        min_delta=0.00,
     )
     # create model and trainer
-    audio_model = AudioModel(input_shape=audio_shape, config=config, num_classes=1)
+    audio_model = AudioModel(input_shape=audio_shape, config=config, num_classes=1, load_weights=load_weights)
 
     # create dataloaders
-    train_loader = DataLoader(
-        train_set, batch_size=2, shuffle=True, num_workers=6
-    )
-    val_loader = DataLoader(
-        val_set, batch_size=2, shuffle=False, num_workers=6
-    )
-    test_loader = DataLoader(
-        test_audio_set, batch_size=2, shuffle=False
-    )
+    train_loader = DataLoader(train_set, batch_size=2, shuffle=True)
+    val_loader = DataLoader(val_set, batch_size=2, shuffle=False)
+    test_loader = DataLoader(test_audio_set, batch_size=2, shuffle=False)
 
     trainer = pl.Trainer(
         max_epochs=config.epochs,
@@ -649,8 +669,21 @@ def experiments() -> list:
     return experiment_list
 
 
+def final_experiment_no_transfer():
+    experiment = Config(model_type="yolo", spectrogram=False, delta=True)
+    fix_gpu()
+    audio_df = create_df_from_audio_filepaths(experiment)
+    train_audio, test_audio = train_test_split(audio_df, test_size=0.2)
+    train_keras_network(
+        experiment,
+        train_audio_df=train_audio,
+        test_audio_df=test_audio,
+        load_weights=False,
+    )
+
+
 if __name__ == "__main__":
-    config = Config()
+    """config = Config()
     fix_gpu()
     experiments = experiments()  # type: ignore
     audio_df = create_df_from_audio_filepaths(config)
@@ -665,4 +698,5 @@ if __name__ == "__main__":
         elif "resnet" in experiment.model_type:
             train_torch_network(
                 experiment, train_audio_df=train_audio, test_audio_df=test_audio
-            )
+            )"""
+    final_experiment_no_transfer()

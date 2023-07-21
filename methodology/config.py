@@ -1,3 +1,4 @@
+from json import load
 import multiprocessing
 from dataclasses import dataclass
 
@@ -42,16 +43,18 @@ class Config(object):
     target_sample_rate: int = 16000
     random_state: int = 42
 
-    def create_network(self, shape=None):
+    def create_network(self, shape=None, load_weights=True):
         """Create network"""
         if shape is None:
             shape = [37648, 52, 1]
         if self.model_type == "yolo":
-            return yoloNetwork.load_model(shape=shape, load_weights=True)
+            return yoloNetwork.load_model(shape=shape, load_weights=load_weights)
         elif self.model_type == "long_yolo":
-            return LongyoloNetwork.load_model(shape=shape, load_weights=True)
+            return LongyoloNetwork.load_model(shape=shape, load_weights=load_weights)
         elif self.model_type == "resnet":
-            return resnet50(weights=ResNet50_Weights.DEFAULT)
+            if load_weights:
+                return resnet50(weights=ResNet50_Weights.DEFAULT)
+            return resnet50()
         elif self.model_type == "ast_model":
             # input shape = (batch_size, time_frame_num, frequency_bins), e.g., (12, 1024, 128)
             return ASTModel(label_dim=1, input_fdim=52, input_tdim=37648, audioset_pretrain=True)

@@ -9,6 +9,8 @@ To pre-process the audio that is in tar files, run process_tar_files.py.
 
 To run all the experiments, run the run_experiments.py file
 
+Both are located in the methodology folder.
+
 
 
 

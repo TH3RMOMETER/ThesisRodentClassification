@@ -607,7 +607,7 @@ def experiments() -> list:
         resnet_mfcc_delta,
         resnet_mfcc_delta_delta,
     ]
-    return experiment_list1
+    return experiment_list
 
 
 def final_experiment_no_transfer():

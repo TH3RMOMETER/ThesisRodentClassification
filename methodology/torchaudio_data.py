@@ -1,7 +1,7 @@
 import os
 import sys
 
-import keras_metrics as km
+import seaborn as sns
 import librosa
 import matplotlib.pyplot as plt
 import numpy as np
@@ -223,7 +223,9 @@ class AudioDataset(Dataset):
 
 
 class AudioModel(pl.LightningModule):
-    def __init__(self, config: Config, num_classes: int, input_shape, load_weights: bool = True):
+    def __init__(
+        self, config: Config, num_classes: int, input_shape, load_weights: bool = True
+    ):
         super().__init__()
         self.model = config.create_network(load_weights=load_weights)
         in_features = self.model.fc.in_features  # type: ignore
@@ -305,7 +307,7 @@ class AudioModel(pl.LightningModule):
         x, y = batch
         logits, loss = self.loss(x, y.unsqueeze(1))
         logits_int = logits.round().long()
-        self.metric_collection_val.update(logits_int, y.unsqueeze(1))
+        self.metric_collection_val.update(logits, y.unsqueeze(1))
         self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log_dict(
             self.metric_collection_val, on_step=False, on_epoch=True, prog_bar=True  # type: ignore
@@ -320,6 +322,9 @@ class AudioModel(pl.LightningModule):
         self.log_dict(
             self.metric_collection_test, on_step=False, on_epoch=True, prog_bar=True  # type: ignore
         )
+
+    def predict_step(self, batch, batch_idx, dataloader_idx=0):
+        return self(batch[0])
 
 
 def create_model(config: Config, audio_shape: list, load_weights: bool = True):
@@ -359,117 +364,12 @@ def create_train_val_split(audio_df: AudioDataset, random_state: int = 42) -> tu
     return train_set, val_set
 
 
-def create_ast_data_and_model(config: Config):
-    audio_conf = {
-        "num_mel_bins": 64,
-        "target_length": config.audio_length,
-        "freqm": 0,
-        "timem": 0,
-        "mixup": 0,
-        "mode": "train",
-        "mean": 4.2677393,
-        "std": 4.5689974,
-        "noise": False,
-    }
-    audio_df = create_df_from_audio_filepaths(config)
-    audio_data_set = AudiosetDataset(
-        audio_df, audio_conf, target_sample_rate=config.target_sample_rate
-    )
-    train_set, val_set, test_set = create_train_val_split(audio_data_set)
-    train_loader = torch.utils.data.DataLoader(
-        train_set,
-        batch_size=config.batch_size,
-        shuffle=True,
-        num_workers=4,
-        pin_memory=True,
-    )
-    val_loader = torch.utils.data.DataLoader(
-        val_set,
-        batch_size=config.batch_size,
-        shuffle=False,
-        num_workers=4,
-        pin_memory=True,
-    )
-
-    test_loader = torch.utils.data.DataLoader(
-        test_set,
-        batch_size=config.batch_size,
-        shuffle=False,
-        num_workers=4,
-        pin_memory=True,
-    )
-
-    # convert audio_length from seconds to frames using sample rate
-    audio_length = config.audio_length * config.target_sample_rate
-
-    audio_model = ASTModel(
-        label_dim=1,
-        input_fdim=128,
-        input_tdim=config.audio_length,
-        imagenet_pretrain=True,
-        audioset_pretrain=True,
-    )
-
-    return audio_model, train_loader, val_loader, test_loader
-
-
-def train_ast_model(config: Config, train_audio_df: pd.DataFrame):
-    # audio_model, train_loader, val_loader, test_loader = create_ast_data_and_model(
-    #  config
-    # )
-
-    audio_model = ASTForAudioClassification.from_pretrained(
-        "MIT/ast-finetuned-audioset-10-10-0.4593"
-    )
-    feature_extractor = AutoFeatureExtractor.from_pretrained(
-        "MIT/ast-finetuned-audioset-10-10-0.4593"
-    )
-    audio_df = AudioDataset(
-        train_audio_df,
-        config.audio_length,
-        spectrogram=config.spectrogram,
-        delta=config.delta,
-        delta_delta=config.delta_delta,
-    )
-    # split dataset
-    train_set, val_set = create_train_val_split(audio_df)
-    # create dataloaders
-    train_loader = DataLoader(
-        train_set,
-        batch_size=config.batch_size,
-        shuffle=True,
-        num_workers=4,
-        pin_memory=True,
-    )
-    val_loader = DataLoader(
-        val_set,
-        batch_size=config.batch_size,
-        shuffle=False,
-        num_workers=4,
-        pin_memory=True,
-    )
-
-    wandb_logger = WandbLogger(
-        project="Rat_classification_2",
-        reinit=True,
-        name=f"{config.model_type}_spec_{config.spectrogram}_D_{config.delta}_DD_{config.delta_delta}",
-    )
-    trainer = pl.Trainer(
-        max_epochs=config.epochs,
-        logger=wandb_logger,
-        log_every_n_steps=1,
-        accelerator="gpu",
-    )
-    trainer.fit(audio_model, train_loader, val_loader)
-    trainer.test(audio_model, test_loader)
-
-
 def train_keras_network(
     config: Config,
     train_audio_df: pd.DataFrame,
     test_audio_df: pd.DataFrame,
     load_weights: bool = True,
-):
+) -> np.ndarray:
     """function for training YOLO and long YOLO pretrained models
 
     Args:
@@ -477,6 +377,9 @@ def train_keras_network(
         train_audio_df (pd.DataFrame): training dataframe
         test_audio_df (pd.DataFrame): test dataframe
         load_weights (bool, optional): whether to load pretrained weights. Defaults to True.
+
+    Returns:
+        np.ndarray: model predictions
     """
     audio_df = AudioDataset(
         train_audio_df,
@@ -517,7 +420,7 @@ def train_keras_network(
 
     # create wandb logger
     run = wandb.init(
-        project="Rat_classification_2",
+        project="Rat_classification_5",
         reinit=True,
         name=f"{config.model_type}_spec_{config.spectrogram}_D_{config.delta}_DD_{config.delta_delta}",
         config=config.__dict__,
@@ -549,6 +452,7 @@ def train_keras_network(
     test_loader = DataGenerator(test_loader, 2)
     model.fit(train_loader, epochs=config.epochs, validation_data=val_loader, callbacks=callbacks)  # type: ignore
     test_stats = model.evaluate(test_loader, callbacks=WandbCallback())  # type: ignore
+    model_predictions = model.predict(test_loader)  # type: ignore
     # get model metrics
     metrics = {}
     for i, metric in enumerate(model.metrics_names):
@@ -556,6 +460,7 @@ def train_keras_network(
     wandb.log(metrics)
 
     run.finish()  # type: ignore
+    return model_predictions
 
 
 def train_torch_network(
@@ -563,9 +468,21 @@ def train_torch_network(
     train_audio_df: pd.DataFrame,
     test_audio_df: pd.DataFrame,
     load_weights: bool = True,
-):
+) -> np.ndarray:
+    """function for training resnet model
+
+    Args:
+        config (Config): experiment setup
+        train_audio_df (pd.DataFrame): training dataframe
+        test_audio_df (pd.DataFrame): test dataframe
+        load_weights (bool, optional): Whether to use pretraining or not. Defaults to True.
+
+    Returns:
+        np.ndarray: model predictions
+    """
     num_cpus = config.num_cpus
     torch.set_float32_matmul_precision("high")
+    torch.cuda.empty_cache()
     # create dataset
     audio_df = AudioDataset(
         train_audio_df,
@@ -594,7 +511,7 @@ def train_torch_network(
 
     # create wandb logger
     wandb_logger = WandbLogger(
-        project="Rat_classification_2",
+        project="Rat_classification_5",
         log_model=True,
         name=f"{config.model_type}_spec_{config.spectrogram}_D_{config.delta}_DD_{config.delta_delta}",
     )
@@ -618,12 +535,18 @@ def train_torch_network(
         min_delta=0.00,
     )
     # create model and trainer
-    audio_model = AudioModel(input_shape=audio_shape, config=config, num_classes=1, load_weights=load_weights)
+    audio_model = AudioModel(
+        input_shape=audio_shape, config=config, num_classes=1, load_weights=load_weights
+    )
 
     # create dataloaders
-    train_loader = DataLoader(train_set, batch_size=2, shuffle=True)
-    val_loader = DataLoader(val_set, batch_size=2, shuffle=False)
-    test_loader = DataLoader(test_audio_set, batch_size=2, shuffle=False)
+    train_loader = DataLoader(
+        train_set, batch_size=1, shuffle=True, num_workers=num_cpus
+    )
+    val_loader = DataLoader(val_set, batch_size=1, shuffle=False, num_workers=num_cpus)
+    test_loader = DataLoader(
+        test_audio_set, batch_size=1, shuffle=False, num_workers=num_cpus
+    )
 
     trainer = pl.Trainer(
         max_epochs=config.epochs,
@@ -637,7 +560,11 @@ def train_torch_network(
         model=audio_model, train_dataloaders=train_loader, val_dataloaders=val_loader
     )
     trainer.test(audio_model, test_loader)
+    # get predictions from model on test set
+    model_predictions = trainer.predict(audio_model, test_loader)
+    model_predictions = torch.cat(model_predictions).numpy()  # type: ignore
     wandb_logger.experiment.finish()
+    return model_predictions
 
 
 def experiments() -> list:
@@ -661,42 +588,106 @@ def experiments() -> list:
     )
 
     experiment_list = [
+        yolo_spec,
+        yolo_mfcc,
+        yolo_mfcc_delta,
+        yolo_mfcc_delta_delta,
+        long_yolo_spec,
+        long_yolo_mfcc,
+        long_yolo_mfcc_delta,
+        long_yolo_mfcc_delta_delta,
         resnet_spec,
         resnet_mfcc,
         resnet_mfcc_delta,
         resnet_mfcc_delta_delta,
     ]
-    return experiment_list
+    experiment_list1 = [
+        resnet_spec,
+        resnet_mfcc,
+        resnet_mfcc_delta,
+        resnet_mfcc_delta_delta,
+    ]
+    return experiment_list1
 
 
 def final_experiment_no_transfer():
     experiment = Config(model_type="yolo", spectrogram=False, delta=True)
     fix_gpu()
-    audio_df = create_df_from_audio_filepaths(experiment)
-    train_audio, test_audio = train_test_split(audio_df, test_size=0.2)
-    train_keras_network(
+    train_audio = pd.read_csv("train_audio.csv")
+    test_audio = pd.read_csv("test_audio.csv")
+    predictions = train_keras_network(
         experiment,
         train_audio_df=train_audio,
         test_audio_df=test_audio,
-        load_weights=False,
+        load_weights=True,
     )
+    # create confusion matrix
+    predictions = predictions.round().astype(int)
+    test_audio["predictions"] = predictions
+    # create a nice seaborn plot of the confusion matrix
+    confusion_matrix = pd.crosstab(
+        test_audio["label"],
+        test_audio["predictions"],
+        rownames=["Actual"],
+        colnames=["Predicted"],
+    )
+    plt.figure(figsize=(10, 7))
+    plt.savefig("confusion_matrix1.png")
+    plt.show()
+
+
+def load_model_and_create_confusion_matrix():
+    experiment = Config(model_type="yolo", spectrogram=False, delta=True)
+    fix_gpu()
+    train_audio = pd.read_csv("train_audio.csv")
+    test_audio = pd.read_csv("test_audio.csv")
+
+    model_predictions = train_keras_network(
+        experiment,
+        train_audio_df=train_audio,
+        test_audio_df=test_audio,
+        load_weights=True,
+    )
+    # create confusion matrix
+    model_predictions = model_predictions.round().astype(int)
+    test_audio["predictions"] = model_predictions
+    # create a nice seaborn plot of the confusion matrix
+    confusion_matrix = pd.crosstab(
+        test_audio["label"],
+        test_audio["predictions"],
+        rownames=["Actual"],
+        colnames=["Predicted"],
+    )
+    plt.figure(figsize=(10, 7))
+    plt.title("Confusion matrix")
+    sns.heatmap(confusion_matrix, annot=True, fmt="d")
+    # save confusion matrix
+    plt.savefig("confusion_matrix1.png")
+    plt.show()
 
 
 if __name__ == "__main__":
-    """config = Config()
+    #load_model_and_create_confusion_matrix()
+    config = Config()
     fix_gpu()
     experiments = experiments()  # type: ignore
-    audio_df = create_df_from_audio_filepaths(config)
-    train_audio, test_audio = train_test_split(audio_df, test_size=0.2)
+    # split audio dataframe into train and test
+    train_audio = pd.read_csv("train_audio.csv")
+    test_audio = pd.read_csv("test_audio.csv")
     for experiment in experiments:  # type: ignore
+        predictions = None
         # if experiment model type contains yolo, train yolo model
         if "yolo" in experiment.model_type:
-            train_keras_network(
+            predictions = train_keras_network(
                 experiment, train_audio_df=train_audio, test_audio_df=test_audio
             )
         # if experiment model type contains resnet, train resnet model
         elif "resnet" in experiment.model_type:
-            train_torch_network(
+            predictions = train_torch_network(
                 experiment, train_audio_df=train_audio, test_audio_df=test_audio
-            )"""
-    final_experiment_no_transfer()
+            )
+        # save predictions
+        np.save(
+            f"{experiment.model_type}_spec_{experiment.spectrogram}_D_{experiment.delta}_DD_{experiment.delta_delta}.npy",
+            predictions,  # type: ignore
+        )
